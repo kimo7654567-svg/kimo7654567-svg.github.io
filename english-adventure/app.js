@@ -47,6 +47,7 @@ function showScreen(name) {
   if (name === 'wrong') renderWrong();
   if (name === 'home') updateHome();
   if (name === 'quiz') resetQuiz();
+  if (name === 'story') renderGenreGrid(storyState.level);
 }
 
 function updateHome() {
@@ -220,12 +221,16 @@ function addXP(amount) {
 }
 
 // ==================== TTS ====================
-const LEVEL_RATES = { L1: 0.7, L2: 0.78, L3: 0.82, L4: 0.9, L5: 1.0 };
+const LEVEL_RATES = { 'L0.5': 0.65, L1: 0.7, L2: 0.78, L3: 0.82, L4: 0.9, L5: 1.0 };
+
+function stripEmoji(text) {
+  return text.replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27FF}]|[\u{2B00}-\u{2BFF}]|[\u{FE00}-\u{FEFF}]|[\u{1F900}-\u{1F9FF}]|[\u{1FA00}-\u{1FA9F}]/gu, '').trim();
+}
 
 function speak(text, rate = 0.85) {
   if (!window.speechSynthesis) { showToast('此裝置不支援語音'); return; }
   window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
+  const u = new SpeechSynthesisUtterance(stripEmoji(text));
   u.lang = 'en-US'; u.rate = rate;
   window.speechSynthesis.speak(u);
 }
@@ -628,7 +633,7 @@ function speakSentence(idx) {
   const el = document.getElementById('story-sent-' + idx);
   if (!el) return;
   el.classList.add('speaking');
-  const u = new SpeechSynthesisUtterance(storyState.sentences[idx]);
+  const u = new SpeechSynthesisUtterance(stripEmoji(storyState.sentences[idx]));
   u.lang = 'en-US'; u.rate = LEVEL_RATES[storyState.level] || 0.85;
   u.onend = () => el.classList.remove('speaking');
   window.speechSynthesis.cancel();
@@ -646,7 +651,7 @@ function readStoryAll() {
     clearHighlight();
     const el = document.getElementById('story-sent-' + idx);
     if (el) el.classList.add('speaking');
-    const u = new SpeechSynthesisUtterance(sentences[idx]);
+    const u = new SpeechSynthesisUtterance(stripEmoji(sentences[idx]));
     u.lang = 'en-US'; u.rate = rate;
     u.onend = () => { idx++; speakNext(); };
     window.speechSynthesis.speak(u);
@@ -660,7 +665,7 @@ function readStoryStep() {
   clearHighlight();
   const el = document.getElementById('story-sent-' + idx);
   if (el) { el.classList.add('speaking'); el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
-  const u = new SpeechSynthesisUtterance(storyState.sentences[idx]);
+  const u = new SpeechSynthesisUtterance(stripEmoji(storyState.sentences[idx]));
   u.lang = 'en-US'; u.rate = LEVEL_RATES[storyState.level] || 0.85;
   u.onend = () => el && el.classList.remove('speaking');
   window.speechSynthesis.cancel();
@@ -721,6 +726,3 @@ function confetti() {
 // ==================== BOOT ====================
 load();
 updateHome();
-// 初始化故事頁 genre grid
-const _genreGrid = document.getElementById('genreGrid');
-if (_genreGrid) renderGenreGrid(storyState.level);
