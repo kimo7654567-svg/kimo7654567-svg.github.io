@@ -195,6 +195,9 @@ function addWord() {
   const pos = document.getElementById('addPos').value.trim();
   const sentence = document.getElementById('addSentence').value.trim();
   if (!en || !zh) { showToast('⚠️ 請填入英文和中文'); return; }
+  if (state.words.find(x => x.en.toLowerCase() === en.toLowerCase())) {
+    showToast(`⚠️ 單字庫已有「${en}」`); return;
+  }
   state.words.push({ en, zh, pos, sentence, streak: 0, nextReview: Date.now() });
   save();
   ['addWord','addZh','addPos','addSentence'].forEach(id => document.getElementById(id).value = '');
@@ -506,6 +509,13 @@ function selectGenre(g) {
   document.querySelectorAll('.genre-chip').forEach(c => c.classList.toggle('selected', c.dataset.genre === g));
 }
 
+function toggleStoryZh(btn) {
+  const content = btn.nextElementSibling;
+  const isHidden = content.style.display === 'none';
+  content.style.display = isHidden ? 'block' : 'none';
+  btn.textContent = isHidden ? '🇹🇼 隱藏中文翻譯' : '🇹🇼 顯示中文翻譯';
+}
+
 function showStorySetup() {
   stopReading();
   document.getElementById('storySetup').style.display = 'block';
@@ -545,6 +555,17 @@ async function generateStory() {
     document.getElementById('storyBody').innerHTML = (data.sentences || [])
       .map((s, i) => `<span class="story-sent" id="story-sent-${i}" onclick="speakSentence(${i})">${s} </span>`)
       .join('');
+
+    // 中文翻譯折疊區
+    const zhArea = document.getElementById('storyZhArea');
+    if (data.story_zh) {
+      const zhParagraphs = data.story_zh.split('\n\n').map(p => `<p>${p}</p>`).join('');
+      zhArea.innerHTML = `
+        <button class="story-zh-toggle" onclick="toggleStoryZh(this)">🇹🇼 顯示中文翻譯</button>
+        <div class="story-zh-content" style="display:none">${zhParagraphs}</div>`;
+    } else {
+      zhArea.innerHTML = '';
+    }
 
     if (data.cultural_note) {
       const cn = document.getElementById('culturalNote');
