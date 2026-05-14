@@ -457,12 +457,13 @@ let storyState = { level: 'L0.5', genre: 'Hero Quest', sentences: [], stepIdx: 0
 
 const GENRES = {
   'L0.5': [
-    { genre: 'Hero Quest',        icon: '⚔️', sub: '英雄任務' },
-    { genre: 'Escape Room',       icon: '🔐', sub: '密室逃脫' },
-    { genre: 'Adventure',         icon: '🗺️', sub: '冒險' },
-    { genre: 'Animal Story',      icon: '🦁', sub: '動物故事' },
-    { genre: 'Sports',            icon: '⚽', sub: '運動' },
-    { genre: 'Nature & Weather',  icon: '🌦️', sub: '自然天氣' },
+    { genre: 'Hero Quest',      icon: '⚔️', sub: '英雄任務' },
+    { genre: 'Escape Room',     icon: '🔐', sub: '密室逃脫' },
+    { genre: 'Adventure',       icon: '🗺️', sub: '冒險' },
+    { genre: 'Animal Story',    icon: '🦁', sub: '動物故事' },
+    { genre: 'Horror Story',    icon: '👻', sub: '恐怖故事' },
+    { genre: 'Poppy Playtime',  icon: '🧸', sub: '波比玩具時間' },
+    { genre: 'Nature & Weather',icon: '🌦️', sub: '自然天氣' },
   ],
   default: [
     { section: '✨ 想像類' },
