@@ -1,1 +1,211 @@
-asdf
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="英語冒險">
+<title>英語冒險 English Adventure</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Baloo+2:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="header-title">⭐ 英語<span>冒險</span></div>
+    <div style="font-size:10px;color:rgba(255,255,255,0.6);font-weight:600">v1.08</div>
+  </div>
+  <div class="header-right">
+    <div class="xp-badge"><span>✨</span><span id="headerXP">0</span> XP</div>
+    <div class="level-badge" id="headerLevel">Lv.1</div>
+  </div>
+</div>
+
+<div class="nav">
+  <button class="nav-btn active" onclick="showScreen('home')" id="nav-home"><span class="icon">🏠</span>首頁</button>
+  <button class="nav-btn" onclick="showScreen('words')" id="nav-words"><span class="icon">📖</span>單字庫</button>
+  <button class="nav-btn" onclick="showScreen('add')" id="nav-add"><span class="icon">➕</span>新增</button>
+  <button class="nav-btn" onclick="showScreen('generate')" id="nav-generate"><span class="icon">✨</span>AI生成</button>
+  <button class="nav-btn" onclick="showScreen('quiz')" id="nav-quiz"><span class="icon">🎯</span>測驗</button>
+  <button class="nav-btn" onclick="showScreen('story')" id="nav-story"><span class="icon">📚</span>故事</button>
+  <button class="nav-btn" onclick="showScreen('wrong')" id="nav-wrong"><span class="icon">❌</span>錯題本</button>
+</div>
+
+<!-- HOME -->
+<div class="screen active" id="screen-home">
+  <div class="hero-card">
+    <div class="hero-greeting">今天也要加油！</div>
+    <div class="hero-level" id="heroLevelName">🌱 英語新芽</div>
+    <div class="xp-bar-wrap"><div class="xp-bar-fill" id="heroXpBar" style="width:0%"></div></div>
+    <div class="xp-label" id="heroXpLabel">0 / 100 XP</div>
+  </div>
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-icon">📚</div><div class="stat-num" id="statWords">0</div><div class="stat-label">學過的字</div></div>
+    <div class="stat-card"><div class="stat-icon">🎯</div><div class="stat-num" id="statQuizzes">0</div><div class="stat-label">完成測驗</div></div>
+    <div class="stat-card"><div class="stat-icon">🏆</div><div class="stat-num" id="statCorrect">0</div><div class="stat-label">答對次數</div></div>
+  </div>
+  <div class="section-title">⚡ 快速開始</div>
+  <div class="quick-actions">
+    <button class="action-btn quiz" onclick="showScreen('quiz')"><span class="icon">🎯</span>開始測驗</button>
+    <button class="action-btn generate" onclick="showScreen('generate')"><span class="icon">✨</span>AI 今日單字</button>
+    <button class="action-btn add" onclick="showScreen('add')"><span class="icon">✏️</span>新增單字</button>
+    <button class="action-btn story" onclick="showScreen('story')"><span class="icon">📚</span>AI 故事</button>
+  </div>
+</div>
+
+<!-- WORDS -->
+<div class="screen" id="screen-words">
+  <div class="search-bar">
+    <span>🔍</span>
+    <input type="text" id="searchInput" placeholder="搜尋單字..." oninput="renderWordList()">
+  </div>
+  <div class="ie-bar">
+    <button class="ie-btn export-btn" onclick="exportWords()">⬇️ 匯出 JSON</button>
+    <button class="ie-btn import-merge-btn" onclick="triggerImport('merge')">⬆️ 合併匯入</button>
+    <button class="ie-btn import-replace-btn" onclick="triggerImport('replace')">🔄 覆蓋匯入</button>
+  </div>
+  <input type="file" id="importFileInput" accept=".json" style="display:none" onchange="handleImportFile(event)">
+  <div id="wordListContainer"></div>
+</div>
+
+<!-- ADD -->
+<div class="screen" id="screen-add">
+  <div class="add-card">
+    <h3>✏️ 新增單字</h3>
+    <div class="input-group">
+      <label>英文單字</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" id="addWord" placeholder="例：apple" style="flex:1" onblur="autoLookup()" onkeydown="if(event.key==='Enter'){autoLookup()}">
+        <button id="lookupBtn" onclick="autoLookup()" style="background:linear-gradient(135deg,#AB47BC,#7B1FA2);color:white;border:none;border-radius:12px;padding:11px 14px;font-family:'Nunito',sans-serif;font-size:13px;font-weight:800;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:all 0.15s;">🔍 AI 查詢</button>
+      </div>
+    </div>
+    <div id="lookupStatus" style="display:none;margin:-6px 0 10px;font-size:13px;color:#7B1FA2;font-weight:700"></div>
+    <div class="input-group"><label>詞性</label><input type="text" id="addPos" placeholder="例：n. 名詞" readonly style="background:#F8F8F8;color:#5C6BC0;font-weight:700"></div>
+    <div class="input-group"><label>中文翻譯</label><input type="text" id="addZh" placeholder="例：蘋果"></div>
+    <div class="input-group"><label>例句</label><textarea id="addSentence" placeholder="例：I like to eat apples."></textarea></div>
+    <button class="submit-btn" onclick="addWord()">➕ 加入單字庫</button>
+  </div>
+  <div class="add-card">
+    <h3>📝 新增句子</h3>
+    <div class="input-group"><label>英文句子</label><textarea id="addSentenceEn" placeholder="例：She goes to school every day."></textarea></div>
+    <div class="input-group"><label>中文翻譯</label><input type="text" id="addSentenceZh" placeholder="例：她每天去上學。"></div>
+    <button class="submit-btn" onclick="addSentence()">➕ 加入句子庫</button>
+  </div>
+</div>
+
+<!-- GENERATE -->
+<div class="screen" id="screen-generate">
+  <div class="generate-card">
+    <h2>✨ AI 每日單字</h2>
+    <p>按下按鈕，AI 會幫你挑選適合小學三年級的常用英文單字，附上中文和例句！</p>
+    <button class="gen-btn" id="genBtn" onclick="generateWords()">🎲 幫我生成今日單字！</button>
+  </div>
+  <div id="generatedResult"></div>
+</div>
+
+<!-- QUIZ -->
+<div class="screen" id="screen-quiz">
+  <div id="quizMenu" class="quiz-menu">
+    <div class="section-title">🎮 選擇測驗方式</div>
+    <button class="quiz-option" onclick="startQuiz('spelling')"><span class="quiz-option-icon">🔊</span><div class="quiz-option-text"><div class="quiz-option-title">英聽拼寫單字</div><div class="quiz-option-desc">聽到英文，把單字拼出來</div></div><span class="quiz-option-arrow">›</span></button>
+    <button class="quiz-option" onclick="startQuiz('sentence')"><span class="quiz-option-icon">🎧</span><div class="quiz-option-text"><div class="quiz-option-title">英聽寫出句子</div><div class="quiz-option-desc">聽到英文句子，把它寫出來</div></div><span class="quiz-option-arrow">›</span></button>
+    <button class="quiz-option" onclick="startQuiz('cloze')"><span class="quiz-option-icon">✏️</span><div class="quiz-option-text"><div class="quiz-option-title">克漏字測驗</div><div class="quiz-option-desc">看句子，選出正確的單字（AI出題）</div></div><span class="quiz-option-arrow">›</span></button>
+    <button class="quiz-option" onclick="startQuiz('mixed')"><span class="quiz-option-icon">🎰</span><div class="quiz-option-text"><div class="quiz-option-title">綜合測驗</div><div class="quiz-option-desc">混合所有題型，全面練習！</div></div><span class="quiz-option-arrow">›</span></button>
+  </div>
+  <div id="quizPlay" class="quiz-play">
+    <div class="quiz-header">
+      <div class="quiz-progress-text" id="quizProgressText">第 1 題 / 共 10 題</div>
+      <div class="quiz-score-text" id="quizScoreText">✅ 0 答對</div>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="quizProgressBar" style="width:0%"></div></div>
+    <div class="question-card" id="questionCard"></div>
+    <div class="feedback-box" id="feedbackBox">
+      <div class="feedback-emoji" id="feedbackEmoji"></div>
+      <div class="feedback-text" id="feedbackText"></div>
+      <div class="feedback-answer" id="feedbackAnswer"></div>
+    </div>
+    <button class="check-btn" id="checkBtn" onclick="checkAnswer()">✓ 確認答案</button>
+    <button class="next-btn" id="nextBtn" onclick="nextQuestion()">下一題 →</button>
+  </div>
+  <div id="quizResult" class="quiz-result">
+    <div class="result-emoji" id="resultEmoji">🎉</div>
+    <div class="result-title">測驗完成！</div>
+    <div class="result-score" id="resultScore">8 / 10</div>
+    <div class="result-xp" id="resultXP">+40 XP 獲得！</div>
+    <button class="result-back-btn" onclick="resetQuiz()">再玩一次 🔄</button>
+  </div>
+</div>
+
+<!-- STORY -->
+<div class="screen" id="screen-story">
+  <div id="storySetup">
+    <div class="story-header-card">
+      <h2>📚 AI 英語故事</h2>
+      <p>選擇難度和主題，AI 幫你生成一篇量身訂做的英語故事，還可以朗讀！</p>
+    </div>
+    <div class="story-config-card">
+      <h3>📊 選擇難度</h3>
+      <div class="level-grid">
+        <button class="level-chip selected" data-level="L1" onclick="selectLevel('L1')"><span class="lv-code">L1</span>Starter<br><span style="font-size:9px;opacity:0.7">A1</span></button>
+        <button class="level-chip" data-level="L2" onclick="selectLevel('L2')"><span class="lv-code">L2</span>Elementary<br><span style="font-size:9px;opacity:0.7">A2</span></button>
+        <button class="level-chip" data-level="L3" onclick="selectLevel('L3')"><span class="lv-code">L3</span>Intermediate<br><span style="font-size:9px;opacity:0.7">B1</span></button>
+        <button class="level-chip" data-level="L4" onclick="selectLevel('L4')"><span class="lv-code">L4</span>Upper-Int<br><span style="font-size:9px;opacity:0.7">B2</span></button>
+        <button class="level-chip" data-level="L5" onclick="selectLevel('L5')"><span class="lv-code">L5</span>Advanced<br><span style="font-size:9px;opacity:0.7">C1</span></button>
+      </div>
+    </div>
+    <div class="story-config-card">
+      <h3>🎭 選擇主題</h3>
+      <div class="genre-grid">
+        <div class="genre-section-label">✨ 想像類</div>
+        <button class="genre-chip selected" data-genre="Fairy Tale" onclick="selectGenre('Fairy Tale')"><span class="genre-icon">🧚</span><div class="genre-name">Fairy Tale</div><div class="genre-sub">童話故事</div></button>
+        <button class="genre-chip" data-genre="Adventure" onclick="selectGenre('Adventure')"><span class="genre-icon">🗺️</span><div class="genre-name">Adventure</div><div class="genre-sub">冒險</div></button>
+        <button class="genre-chip" data-genre="Mystery" onclick="selectGenre('Mystery')"><span class="genre-icon">🔍</span><div class="genre-name">Mystery</div><div class="genre-sub">神秘推理</div></button>
+        <button class="genre-chip" data-genre="Sci-Fi" onclick="selectGenre('Sci-Fi')"><span class="genre-icon">🚀</span><div class="genre-name">Sci-Fi</div><div class="genre-sub">科幻</div></button>
+        <button class="genre-chip" data-genre="Animal Story" onclick="selectGenre('Animal Story')"><span class="genre-icon">🦁</span><div class="genre-name">Animal Story</div><div class="genre-sub">動物故事</div></button>
+        <div class="genre-section-label">🌍 實用生活類</div>
+        <button class="genre-chip" data-genre="Travel" onclick="selectGenre('Travel')"><span class="genre-icon">✈️</span><div class="genre-name">Travel</div><div class="genre-sub">旅行</div></button>
+        <button class="genre-chip" data-genre="Daily Life" onclick="selectGenre('Daily Life')"><span class="genre-icon">🏠</span><div class="genre-name">Daily Life</div><div class="genre-sub">日常生活</div></button>
+        <button class="genre-chip" data-genre="Medical" onclick="selectGenre('Medical')"><span class="genre-icon">🏥</span><div class="genre-name">Medical</div><div class="genre-sub">醫療</div></button>
+        <button class="genre-chip" data-genre="Workplace" onclick="selectGenre('Workplace')"><span class="genre-icon">💼</span><div class="genre-name">Workplace</div><div class="genre-sub">職場</div></button>
+      </div>
+    </div>
+    <button class="story-gen-btn" id="storyGenBtn" onclick="generateStory()">📖 生成故事！</button>
+  </div>
+  <div id="storyResult" class="story-result-wrap">
+    <div class="story-result-card">
+      <div class="story-title" id="storyTitle"></div>
+      <div class="story-meta" id="storyMeta"></div>
+      <div class="story-read-controls">
+        <button class="story-ctrl-btn btn-read-all" onclick="readStoryAll()">🔊 整篇朗讀</button>
+        <button class="story-ctrl-btn btn-read-step" onclick="readStoryStep()">▶️ 逐句朗讀</button>
+        <button class="story-ctrl-btn btn-stop" onclick="stopReading()">⏹ 停止</button>
+      </div>
+      <div class="story-body" id="storyBody"></div>
+      <div id="culturalNote" style="display:none" class="cultural-note"></div>
+    </div>
+    <div class="vocab-section">
+      <h3>📝 Key Vocabulary</h3>
+      <div id="vocabList"></div>
+      <button class="vocab-import-btn" onclick="importVocab()">✅ 加入選取單字到單字庫</button>
+    </div>
+    <button class="story-back-btn" onclick="showStorySetup()">← 重新設定</button>
+  </div>
+</div>
+
+<!-- WRONG -->
+<div class="screen" id="screen-wrong">
+  <div class="section-title">❌ 錯題本</div>
+  <div id="wrongContainer"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+<canvas class="confetti-overlay" id="confettiCanvas"></canvas>
+
+<!-- 注意順序：api.js 要在 app.js 之前 -->
+<script src="api.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
