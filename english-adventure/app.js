@@ -720,4 +720,5 @@ function confetti() {
 load();
 updateHome();
 // 初始化故事頁 genre grid
-document.addEventListener('DOMContentLoaded', () => renderGenreGrid(storyState.level));
+const _genreGrid = document.getElementById('genreGrid');
+if (_genreGrid) renderGenreGrid(storyState.level);
