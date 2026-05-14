@@ -150,6 +150,12 @@ body { font-family: 'Nunito', sans-serif; background: var(--bg); color: var(--te
 .result-xp { font-size: 18px; font-weight: 800; color: var(--grass-dark); margin-bottom: 20px; }
 .result-back-btn { background: linear-gradient(135deg, #29B6F6, #0288D1); color: white; border: none; border-radius: 14px; padding: 14px 32px; font-family: 'Nunito', sans-serif; font-size: 16px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 12px rgba(2,136,209,0.3); }
 
+.story-zh-toggle { background: #F3E5F5; color: var(--purple-dark); border: none; border-radius: 10px; padding: 8px 16px; font-family: 'Nunito', sans-serif; font-size: 13px; font-weight: 800; cursor: pointer; margin-top: 16px; display: block; transition: all 0.15s; }
+.story-zh-toggle:active { transform: scale(0.97); }
+.story-zh-content { margin-top: 10px; padding: 14px 16px; background: #FAF5FF; border-radius: 14px; border-left: 4px solid var(--purple); }
+.story-zh-content p { font-size: 14px; line-height: 1.9; color: #4A235A; margin-bottom: 10px; }
+.story-zh-content p:last-child { margin-bottom: 0; }
+
 /* WRONG */
 .wrong-item { background: white; border-radius: 16px; padding: 14px 16px; margin-bottom: 10px; border-left: 4px solid var(--red); box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
 .wrong-en { font-size: 18px; font-weight: 800; }
