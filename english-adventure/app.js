@@ -1,6 +1,6 @@
 // ==================== STATE ====================
 let state = {
-  words: [], sentences: [], xp: 0,
+  words: [], xp: 0,
   totalQuizzes: 0, totalCorrect: 0, wrongWords: {},
 };
 
@@ -26,7 +26,16 @@ function getLevel(xp) {
 
 // ==================== STORAGE ====================
 function save() { try { localStorage.setItem('ea_state', JSON.stringify(state)); } catch(e){} }
-function load() { try { const s = localStorage.getItem('ea_state'); if (s) state = { ...state, ...JSON.parse(s) }; } catch(e) {} }
+function load() {
+  try {
+    const s = localStorage.getItem('ea_state');
+    if (s) {
+      const loaded = JSON.parse(s);
+      state = { ...state, ...loaded };
+      delete state.sentences; // 相容舊版
+    }
+  } catch(e) {}
+}
 
 // ==================== UI ====================
 function showScreen(name) {
@@ -108,7 +117,7 @@ function renderWrong() {
 
 // ==================== IMPORT / EXPORT ====================
 function exportWords() {
-  const data = { words: state.words, sentences: state.sentences, exportedAt: new Date().toISOString() };
+  const data = { words: state.words, exportedAt: new Date().toISOString() };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -132,11 +141,9 @@ function handleImportFile(e) {
     try {
       const data = JSON.parse(ev.target.result);
       const newWords = data.words || [];
-      const newSents = data.sentences || [];
       if (_importMode === 'replace') {
         if (!confirm(`確定要覆蓋？將取代現有 ${state.words.length} 個單字。`)) return;
         state.words = newWords;
-        state.sentences = newSents;
         showToast(`✅ 已載入 ${state.words.length} 個單字`);
       } else {
         let added = 0;
@@ -144,9 +151,6 @@ function handleImportFile(e) {
           if (!state.words.find(x => x.en.toLowerCase() === w.en.toLowerCase())) {
             state.words.push(w); added++;
           }
-        });
-        newSents.forEach(s => {
-          if (!state.sentences.find(x => x.en === s.en)) state.sentences.push(s);
         });
         showToast(`✅ 合併完成！新增 ${added} 個單字`);
       }
@@ -198,17 +202,6 @@ function addWord() {
   showToast('✅ 單字加入成功！'); addXP(5);
 }
 
-function addSentence() {
-  const en = document.getElementById('addSentenceEn').value.trim();
-  const zh = document.getElementById('addSentenceZh').value.trim();
-  if (!en || !zh) { showToast('⚠️ 請填入句子和翻譯'); return; }
-  state.sentences.push({ en, zh, streak: 0, nextReview: Date.now() });
-  save();
-  document.getElementById('addSentenceEn').value = '';
-  document.getElementById('addSentenceZh').value = '';
-  showToast('✅ 句子加入成功！'); addXP(8);
-}
-
 function deleteWord(idx) {
   if (confirm('確定要刪除這個單字嗎？')) {
     state.words.splice(idx, 1); save(); renderWordList(); showToast('🗑 已刪除');
@@ -235,52 +228,6 @@ function speak(text, rate = 0.85) {
   const u = new SpeechSynthesisUtterance(text);
   u.lang = 'en-US'; u.rate = rate;
   window.speechSynthesis.speak(u);
-}
-
-// ==================== GENERATE ====================
-async function generateWords() {
-  const btn = document.getElementById('genBtn');
-  const result = document.getElementById('generatedResult');
-  btn.disabled = true;
-  btn.innerHTML = `<span class="loading-dots" style="color:#7B1FA2"><span></span><span></span><span></span></span> AI 正在思考...`;
-  result.innerHTML = '';
-  try {
-    const words = await callScript({ type: 'generate', learned: state.words.map(w => w.en).join(', ') || '無' });
-    window._generatedWords = words;
-    window._generatedChecked = words.map(() => true);
-    window.toggleCheck = (i) => {
-      window._generatedChecked[i] = !window._generatedChecked[i];
-      document.getElementById('chk'+i).textContent = window._generatedChecked[i] ? '☑️' : '⬜';
-    };
-    window.importGenerated = () => {
-      let count = 0;
-      window._generatedWords.forEach((w, i) => {
-        if (!window._generatedChecked[i]) return;
-        if (!state.words.find(x => x.en.toLowerCase() === w.en.toLowerCase())) {
-          state.words.push({ en: w.en, zh: w.zh, sentence: w.sentence, pos: w.pos || '', streak: 0, nextReview: Date.now() });
-          count++;
-        }
-      });
-      save(); addXP(count * 5); showToast(`✅ 成功加入 ${count} 個單字！`);
-      result.querySelector('.import-btn').textContent = '✅ 已加入！';
-      result.querySelector('.import-btn').disabled = true;
-    };
-    result.innerHTML = `<div class="generated-preview">
-      ${words.map((w,i) => `<div class="gen-word-item">
-        <span class="gen-check" onclick="toggleCheck(${i})" id="chk${i}">☑️</span>
-        <div>
-          <div class="gen-word-en">${w.en} <button class="speak-btn" onclick="speak('${esc(w.en)}')">🔊</button></div>
-          <div class="gen-word-zh">${w.zh}</div>
-          <div class="gen-word-sent">${w.sentence}</div>
-        </div>
-      </div>`).join('')}
-      <button class="import-btn" onclick="importGenerated()">✅ 加入我的單字庫</button>
-    </div>`;
-  } catch(e) {
-    result.innerHTML = `<div class="generated-preview"><p style="color:#EF5350;text-align:center;padding:16px">❌ ${e.message}</p></div>`;
-  }
-  btn.disabled = false;
-  btn.innerHTML = '🎲 再生成一次！';
 }
 
 // ==================== QUIZ ====================
@@ -326,23 +273,28 @@ async function startQuiz(type) {
   document.getElementById('nextBtn').style.display = 'none';
   document.getElementById('feedbackBox').style.display = 'none';
 
+  const wordsWithSentence = words.filter(w => w.sentence);
   const qs = [];
   const total = Math.min(10, words.length);
+
   for (let i = 0; i < total; i++) {
     let t = type;
     if (type === 'mixed') {
       const pool = ['spelling'];
-      if (state.sentences.length) pool.push('sentence');
-      if (words.some(w => w.sentence)) pool.push('cloze');
+      if (wordsWithSentence.length) pool.push('sentence', 'cloze');
       t = pool[i % pool.length];
     }
     if (t === 'spelling') {
       qs.push({ type: 'spelling', word: words[i % words.length] });
     } else if (t === 'sentence') {
-      const s = state.sentences[i % state.sentences.length];
-      qs.push({ type: 'sentence', sentence: s });
+      if (!wordsWithSentence.length) {
+        qs.push({ type: 'spelling', word: words[i % words.length] });
+      } else {
+        const w = wordsWithSentence[i % wordsWithSentence.length];
+        qs.push({ type: 'sentence', word: w });
+      }
     } else if (t === 'cloze') {
-      const w = words.find(x => x.sentence) || words[0];
+      const w = wordsWithSentence[i % Math.max(wordsWithSentence.length, 1)] || words[0];
       const q = await buildClozeQuestion(w);
       qs.push(q || { type: 'spelling', word: words[i % words.length] });
     }
@@ -374,7 +326,7 @@ function renderQuestion() {
     html = `<div class="question-type-label">英聽寫句子</div>
       <button class="speak-big-btn" id="speakBtn" onclick="speakQuestion()">🔊</button>
       <div class="question-hint">聽聲音，把英文句子寫出來</div>
-      <div class="question-zh">${q.sentence.zh}</div>
+      <div class="question-zh">${q.word.zh} 的例句</div>
       <input class="answer-input" id="answerInput" type="text" placeholder="輸入英文句子..." autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">`;
   } else if (q.type === 'cloze') {
     const cd = q.clozeData;
@@ -402,7 +354,7 @@ function speakQuestion() {
   btn.classList.add('speaking');
   let text = '';
   if (q.type === 'spelling') text = q.word.en;
-  else if (q.type === 'sentence') text = q.sentence.en;
+  else if (q.type === 'sentence') text = q.word.sentence;
   else if (q.type === 'cloze') text = q.clozeData.sentence;
   speak(text, 0.8);
   setTimeout(() => btn && btn.classList.remove('speaking'), 2000);
@@ -419,7 +371,7 @@ function checkAnswer() {
     const input = document.getElementById('answerInput');
     val = input ? input.value.trim() : '';
     if (!val) { showToast('請填入答案！'); return; }
-    correct = q.type === 'spelling' ? q.word.en : q.sentence.en;
+    correct = q.type === 'spelling' ? q.word.en : q.word.sentence;
   }
 
   const isCorrect = val.toLowerCase() === correct.toLowerCase();
@@ -493,19 +445,60 @@ function resetQuiz() {
 }
 
 // ==================== STORY ====================
-let storyState = { level: 'L1', genre: 'Fairy Tale', sentences: [], stepIdx: 0 };
+let storyState = { level: 'L0.5', genre: 'Hero Quest', sentences: [], stepIdx: 0, currentTitle: '', currentGenre: '' };
+
+const GENRES = {
+  'L0.5': [
+    { genre: 'Hero Quest',  icon: '⚔️', sub: '英雄任務' },
+    { genre: 'Robot/Tech',  icon: '🤖', sub: '機器人科技' },
+    { genre: 'Escape Room', icon: '🔐', sub: '密室逃脫' },
+    { genre: 'Adventure',   icon: '🗺️', sub: '冒險' },
+    { genre: 'Animal Story',icon: '🦁', sub: '動物故事' },
+    { genre: 'Sci-Fi',      icon: '🚀', sub: '科幻' },
+  ],
+  default: [
+    { section: '✨ 想像類' },
+    { genre: 'Fairy Tale',  icon: '🧚', sub: '童話故事' },
+    { genre: 'Adventure',   icon: '🗺️', sub: '冒險' },
+    { genre: 'Mystery',     icon: '🔍', sub: '神秘推理' },
+    { genre: 'Sci-Fi',      icon: '🚀', sub: '科幻' },
+    { genre: 'Animal Story',icon: '🦁', sub: '動物故事' },
+    { section: '🌍 實用生活類' },
+    { genre: 'Travel',      icon: '✈️', sub: '旅行' },
+    { genre: 'Daily Life',  icon: '🏠', sub: '日常生活' },
+    { genre: 'Medical',     icon: '🏥', sub: '醫療' },
+    { genre: 'Workplace',   icon: '💼', sub: '職場' },
+  ]
+};
+
+function renderGenreGrid(level) {
+  const list = level === 'L0.5' ? GENRES['L0.5'] : GENRES['default'];
+  const grid = document.getElementById('genreGrid');
+  grid.innerHTML = list.map(item => {
+    if (item.section) return `<div class="genre-section-label">${item.section}</div>`;
+    const selected = item.genre === storyState.genre ? 'selected' : '';
+    return `<button class="genre-chip ${selected}" data-genre="${item.genre}" onclick="selectGenre('${item.genre}')">
+      <span class="genre-icon">${item.icon}</span>
+      <div class="genre-name">${item.genre}</div>
+      <div class="genre-sub">${item.sub}</div>
+    </button>`;
+  }).join('');
+}
 
 function selectLevel(lv) {
   storyState.level = lv;
   document.querySelectorAll('.level-chip').forEach(c => c.classList.toggle('selected', c.dataset.level === lv));
+  // 切換 level 時重設 genre 為該 level 的第一個
+  const list = lv === 'L0.5' ? GENRES['L0.5'] : GENRES['default'];
+  const firstGenre = list.find(i => i.genre);
+  storyState.genre = firstGenre ? firstGenre.genre : 'Adventure';
+  renderGenreGrid(lv);
 }
 
 function selectGenre(g) {
   storyState.genre = g;
   document.querySelectorAll('.genre-chip').forEach(c => c.classList.toggle('selected', c.dataset.genre === g));
 }
-
-function showStorySetup() {
   stopReading();
   document.getElementById('storySetup').style.display = 'block';
   document.getElementById('storyResult').classList.remove('active');
@@ -524,11 +517,17 @@ async function generateStory() {
     });
     storyState.sentences = data.sentences || [];
     storyState.stepIdx = 0;
+    storyState.currentTitle = data.title || '';
+    storyState.currentGenre = storyState.genre;
 
     document.getElementById('storySetup').style.display = 'none';
     document.getElementById('storyResult').classList.add('active');
 
-    const levelNames = { L1:'Starter A1', L2:'Elementary A2', L3:'Intermediate B1', L4:'Upper-Int B2', L5:'Advanced C1' };
+    // 重置圖片區
+    document.getElementById('storyImageArea').innerHTML =
+      `<button class="story-img-btn" onclick="generateStoryImage()">🎨 生成故事插圖</button>`;
+
+    const levelNames = { 'L0.5':'Graphic Reader', L1:'Starter A1', L2:'Elementary A2', L3:'Intermediate B1', L4:'Upper-Int B2', L5:'Advanced C1' };
     document.getElementById('storyTitle').textContent = data.title || '故事';
     document.getElementById('storyMeta').innerHTML = `
       <span class="story-badge">${storyState.genre}</span>
@@ -561,11 +560,37 @@ async function generateStory() {
           <div class="vocab-sent">${v.sentence||''}</div>
         </div>
       </div>`).join('');
+
+    const vBtn = document.querySelector('.vocab-import-btn');
+    if (vBtn) { vBtn.textContent = '✅ 加入選取單字到單字庫'; vBtn.disabled = false; }
+
   } catch(e) {
     showToast('❌ ' + e.message);
+    document.getElementById('storySetup').style.display = 'block';
+    document.getElementById('storyResult').classList.remove('active');
   }
   btn.disabled = false;
   btn.innerHTML = '📖 生成故事！';
+}
+
+async function generateStoryImage() {
+  const imgArea = document.getElementById('storyImageArea');
+  imgArea.innerHTML = `<div class="story-img-loading"><span class="loading-dots" style="color:var(--teal-dark)"><span></span><span></span><span></span></span><p>AI 繪製插圖中...</p></div>`;
+  try {
+    const result = await callScript({
+      type: 'image',
+      title: storyState.currentTitle,
+      genre: storyState.currentGenre,
+      level: storyState.level
+    });
+    if (result.imageData) {
+      imgArea.innerHTML = `<img src="data:image/png;base64,${result.imageData}" alt="故事插圖" class="story-img">`;
+    } else {
+      throw new Error('無法取得圖片');
+    }
+  } catch(e) {
+    imgArea.innerHTML = `<div class="story-img-error">🎨 插圖生成失敗<br><small>${e.message}</small><br><button class="story-img-btn" style="margin-top:10px" onclick="generateStoryImage()">重試</button></div>`;
+  }
 }
 
 window.toggleVocab = (i) => {
@@ -694,3 +719,5 @@ function confetti() {
 // ==================== BOOT ====================
 load();
 updateHome();
+// 初始化故事頁 genre grid
+document.addEventListener('DOMContentLoaded', () => renderGenreGrid(storyState.level));
