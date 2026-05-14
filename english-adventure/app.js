@@ -454,25 +454,26 @@ let storyState = { level: 'L0.5', genre: 'Hero Quest', sentences: [], stepIdx: 0
 
 const GENRES = {
   'L0.5': [
-    { genre: 'Hero Quest',  icon: '⚔️', sub: '英雄任務' },
-    { genre: 'Robot/Tech',  icon: '🤖', sub: '機器人科技' },
-    { genre: 'Escape Room', icon: '🔐', sub: '密室逃脫' },
-    { genre: 'Adventure',   icon: '🗺️', sub: '冒險' },
-    { genre: 'Animal Story',icon: '🦁', sub: '動物故事' },
-    { genre: 'Sci-Fi',      icon: '🚀', sub: '科幻' },
+    { genre: 'Hero Quest',        icon: '⚔️', sub: '英雄任務' },
+    { genre: 'Escape Room',       icon: '🔐', sub: '密室逃脫' },
+    { genre: 'Adventure',         icon: '🗺️', sub: '冒險' },
+    { genre: 'Animal Story',      icon: '🦁', sub: '動物故事' },
+    { genre: 'Sports',            icon: '⚽', sub: '運動' },
+    { genre: 'Nature & Weather',  icon: '🌦️', sub: '自然天氣' },
   ],
   default: [
     { section: '✨ 想像類' },
-    { genre: 'Fairy Tale',  icon: '🧚', sub: '童話故事' },
-    { genre: 'Adventure',   icon: '🗺️', sub: '冒險' },
-    { genre: 'Mystery',     icon: '🔍', sub: '神秘推理' },
-    { genre: 'Sci-Fi',      icon: '🚀', sub: '科幻' },
-    { genre: 'Animal Story',icon: '🦁', sub: '動物故事' },
+    { genre: 'Fairy Tale',        icon: '🧚', sub: '童話故事' },
+    { genre: 'Adventure',         icon: '🗺️', sub: '冒險' },
+    { genre: 'Mystery',           icon: '🔍', sub: '神秘推理' },
+    { genre: 'Animal Story',      icon: '🦁', sub: '動物故事' },
+    { genre: 'Sports',            icon: '⚽', sub: '運動' },
+    { genre: 'Nature & Weather',  icon: '🌦️', sub: '自然天氣' },
     { section: '🌍 實用生活類' },
-    { genre: 'Travel',      icon: '✈️', sub: '旅行' },
-    { genre: 'Daily Life',  icon: '🏠', sub: '日常生活' },
-    { genre: 'Medical',     icon: '🏥', sub: '醫療' },
-    { genre: 'Workplace',   icon: '💼', sub: '職場' },
+    { genre: 'Travel',            icon: '✈️', sub: '旅行' },
+    { genre: 'Daily Life',        icon: '🏠', sub: '日常生活' },
+    { genre: 'Medical',           icon: '🏥', sub: '醫療' },
+    { genre: 'Workplace',         icon: '💼', sub: '職場' },
   ]
 };
 
