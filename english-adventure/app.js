@@ -499,6 +499,8 @@ function selectGenre(g) {
   storyState.genre = g;
   document.querySelectorAll('.genre-chip').forEach(c => c.classList.toggle('selected', c.dataset.genre === g));
 }
+
+function showStorySetup() {
   stopReading();
   document.getElementById('storySetup').style.display = 'block';
   document.getElementById('storyResult').classList.remove('active');
