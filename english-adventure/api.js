@@ -1,5 +1,4 @@
 // ==================== API ====================
-// 請把 SCRIPT_URL 換成你最新部署的網址
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzHmM7yXQskkWHKXF0B-obIJrMAhuKCdKaSDZnhjZUOogYykrlJSq762CeD5YlQt560/exec';
 const SECRET = '5566';
 
