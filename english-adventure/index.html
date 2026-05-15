@@ -3,10 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="英語冒險">
-<title>英語冒險 English Adventure</title>
+<meta name="apple-mobile-web-app-title" content="語言冒險">
+<title>語言冒險 Language Adventure</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Baloo+2:wght@400;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
@@ -15,22 +16,22 @@
 
 <div class="header">
   <div>
-    <div class="header-title">⭐ 英語<span>冒險</span></div>
-    <div style="font-size:10px;color:rgba(255,255,255,0.6);font-weight:600">v1.09</div>
+    <div class="header-title">⭐ 語言<span>冒險</span></div>
+    <div style="font-size:10px;color:rgba(255,255,255,0.6);font-weight:600">v1.10</div>
   </div>
   <div class="header-right">
+    <!-- 語言切換 -->
+    <div class="lang-switcher">
+      <button class="lang-flag active" data-lang="en" onclick="switchLang('en')" title="English">🇺🇸</button>
+      <button class="lang-flag" data-lang="ja" onclick="switchLang('ja')" title="日本語">🇯🇵</button>
+    </div>
     <div class="xp-badge"><span>✨</span><span id="headerXP">0</span> XP</div>
     <div class="level-badge" id="headerLevel">Lv.1</div>
   </div>
 </div>
 
-<div class="nav">
-  <button class="nav-btn active" onclick="showScreen('home')" id="nav-home"><span class="icon">🏠</span>首頁</button>
-  <button class="nav-btn" onclick="showScreen('words')" id="nav-words"><span class="icon">📖</span>單字庫</button>
-  <button class="nav-btn" onclick="showScreen('add')" id="nav-add"><span class="icon">➕</span>新增</button>
-  <button class="nav-btn" onclick="showScreen('quiz')" id="nav-quiz"><span class="icon">🎯</span>測驗</button>
-  <button class="nav-btn" onclick="showScreen('story')" id="nav-story"><span class="icon">📚</span>故事</button>
-  <button class="nav-btn" onclick="showScreen('wrong')" id="nav-wrong"><span class="icon">❌</span>錯題本</button>
+<div class="nav" id="mainNav">
+  <!-- 由 JS 動態產生 -->
 </div>
 
 <!-- HOME -->
@@ -55,6 +56,11 @@
   </div>
 </div>
 
+<!-- HIRAGANA 50音（日文專屬） -->
+<div class="screen" id="screen-hiragana">
+  <!-- 由 JS 動態產生 -->
+</div>
+
 <!-- WORDS -->
 <div class="screen" id="screen-words">
   <div class="search-bar">
@@ -72,20 +78,42 @@
 
 <!-- ADD -->
 <div class="screen" id="screen-add">
-  <div class="add-card">
-    <h3>✏️ 新增單字</h3>
-    <div class="input-group">
-      <label>英文單字</label>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input type="text" id="addWord" placeholder="例：apple" style="flex:1" onblur="autoLookup()" onkeydown="if(event.key==='Enter'){autoLookup()}">
-        <button id="lookupBtn" onclick="autoLookup()" style="background:linear-gradient(135deg,#AB47BC,#7B1FA2);color:white;border:none;border-radius:12px;padding:11px 14px;font-family:'Nunito',sans-serif;font-size:13px;font-weight:800;cursor:pointer;white-space:nowrap;flex-shrink:0;">🔍 AI 查詢</button>
+  <!-- 英文新增 -->
+  <div id="addEnSection">
+    <div class="add-card">
+      <h3>✏️ 新增英文單字</h3>
+      <div class="input-group">
+        <label>英文單字</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="text" id="addWord" placeholder="例：apple" style="flex:1" onblur="autoLookup()" onkeydown="if(event.key==='Enter'){autoLookup()}">
+          <button id="lookupBtn" onclick="autoLookup()" style="background:linear-gradient(135deg,#AB47BC,#7B1FA2);color:white;border:none;border-radius:12px;padding:11px 14px;font-family:'Nunito',sans-serif;font-size:13px;font-weight:800;cursor:pointer;white-space:nowrap;flex-shrink:0;">🔍 AI 查詢</button>
+        </div>
       </div>
+      <div id="lookupStatus" style="display:none;margin:-6px 0 10px;font-size:13px;color:#7B1FA2;font-weight:700"></div>
+      <div class="input-group"><label>詞性</label><input type="text" id="addPos" placeholder="例：n. 名詞" readonly style="background:#F8F8F8;color:#5C6BC0;font-weight:700"></div>
+      <div class="input-group"><label>中文翻譯</label><input type="text" id="addZh" placeholder="例：蘋果"></div>
+      <div class="input-group"><label>例句</label><textarea id="addSentence" placeholder="例：I like to eat apples."></textarea></div>
+      <button class="submit-btn" onclick="addWord()">➕ 加入單字庫</button>
     </div>
-    <div id="lookupStatus" style="display:none;margin:-6px 0 10px;font-size:13px;color:#7B1FA2;font-weight:700"></div>
-    <div class="input-group"><label>詞性</label><input type="text" id="addPos" placeholder="例：n. 名詞" readonly style="background:#F8F8F8;color:#5C6BC0;font-weight:700"></div>
-    <div class="input-group"><label>中文翻譯</label><input type="text" id="addZh" placeholder="例：蘋果"></div>
-    <div class="input-group"><label>例句</label><textarea id="addSentence" placeholder="例：I like to eat apples."></textarea></div>
-    <button class="submit-btn" onclick="addWord()">➕ 加入單字庫</button>
+  </div>
+  <!-- 日文新增 -->
+  <div id="addJaSection" style="display:none">
+    <div class="add-card" style="border-top:3px solid #E91E63">
+      <h3>🇯🇵 新增日文單字</h3>
+      <div class="input-group">
+        <label>日文單字</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="text" id="addWordJa" placeholder="例：りんご" style="flex:1" onblur="autoLookupJa()" onkeydown="if(event.key==='Enter'){autoLookupJa()}">
+          <button id="lookupBtnJa" onclick="autoLookupJa()" style="background:linear-gradient(135deg,#E91E63,#880E4F);color:white;border:none;border-radius:12px;padding:11px 14px;font-family:'Nunito',sans-serif;font-size:13px;font-weight:800;cursor:pointer;white-space:nowrap;flex-shrink:0;">🔍 AI 查詢</button>
+        </div>
+      </div>
+      <div id="lookupStatusJa" style="display:none;margin:-6px 0 10px;font-size:13px;color:#E91E63;font-weight:700"></div>
+      <div class="input-group"><label>平假名讀音</label><input type="text" id="addReadingJa" placeholder="例：りんご" readonly style="background:#F8F8F8;color:#880E4F;font-weight:700"></div>
+      <div class="input-group"><label>詞性</label><input type="text" id="addPosJa" placeholder="例：名詞" readonly style="background:#F8F8F8;color:#5C6BC0;font-weight:700"></div>
+      <div class="input-group"><label>中文意思</label><input type="text" id="addZhJa" placeholder="例：蘋果"></div>
+      <div class="input-group"><label>例句</label><textarea id="addSentenceJa" placeholder="例：りんごが好きです。"></textarea></div>
+      <button class="submit-btn" style="background:linear-gradient(135deg,#E91E63,#880E4F)" onclick="addJaWord()">➕ 加入單字庫</button>
+    </div>
   </div>
 </div>
 
@@ -93,8 +121,8 @@
 <div class="screen" id="screen-quiz">
   <div id="quizMenu">
     <div class="section-title">🎮 選擇測驗方式</div>
-    <button class="quiz-option" onclick="startQuiz('spelling')"><span class="quiz-option-icon">🔊</span><div class="quiz-option-text"><div class="quiz-option-title">英聽拼寫單字</div><div class="quiz-option-desc">聽到英文，把單字拼出來</div></div><span class="quiz-option-arrow">›</span></button>
-    <button class="quiz-option" onclick="startQuiz('sentence')"><span class="quiz-option-icon">🎧</span><div class="quiz-option-text"><div class="quiz-option-title">英聽寫出句子</div><div class="quiz-option-desc">聽到例句，把它寫出來</div></div><span class="quiz-option-arrow">›</span></button>
+    <button class="quiz-option" onclick="startQuiz('spelling')"><span class="quiz-option-icon">🔊</span><div class="quiz-option-text"><div class="quiz-option-title">聽寫單字</div><div class="quiz-option-desc">聽到發音，把單字寫出來</div></div><span class="quiz-option-arrow">›</span></button>
+    <button class="quiz-option" onclick="startQuiz('sentence')"><span class="quiz-option-icon">🎧</span><div class="quiz-option-text"><div class="quiz-option-title">聽寫例句</div><div class="quiz-option-desc">聽到例句，把它寫出來</div></div><span class="quiz-option-arrow">›</span></button>
     <button class="quiz-option" onclick="startQuiz('cloze')"><span class="quiz-option-icon">✏️</span><div class="quiz-option-text"><div class="quiz-option-title">克漏字測驗</div><div class="quiz-option-desc">看句子，選出正確的單字（AI出題）</div></div><span class="quiz-option-arrow">›</span></button>
     <button class="quiz-option" onclick="startQuiz('mixed')"><span class="quiz-option-icon">🎰</span><div class="quiz-option-text"><div class="quiz-option-title">綜合測驗</div><div class="quiz-option-desc">混合所有題型，全面練習！</div></div><span class="quiz-option-arrow">›</span></button>
   </div>
@@ -124,46 +152,36 @@
 
 <!-- STORY -->
 <div class="screen" id="screen-story">
-  <!-- 設定頁 -->
   <div id="storySetup">
     <div class="story-header-card">
-      <h2>📚 AI 英語故事</h2>
-      <p>選擇難度和主題，AI 幫你生成一篇量身訂做的英語故事，還可以朗讀！</p>
+      <h2>📚 AI 故事</h2>
+      <p>選擇難度和主題，AI 幫你生成一篇量身訂做的故事，還可以朗讀！</p>
     </div>
-    <div class="story-config-card">
+    <div class="story-config-card" id="levelConfigCard">
       <h3>📊 選擇難度</h3>
-      <div class="level-grid">
+      <div class="level-grid" id="levelGrid">
         <button class="level-chip selected" data-level="L0.5" onclick="selectLevel('L0.5')"><span class="lv-code">L0.5</span>Graphic<br><span style="font-size:9px;opacity:0.7">Age 8-10</span></button>
-        <button class="level-chip" data-level="L1" onclick="selectLevel('L1')"><span class="lv-code">L1</span>Starter<br><span style="font-size:9px;opacity:0.7">A1</span></button>
-        <button class="level-chip" data-level="L2" onclick="selectLevel('L2')"><span class="lv-code">L2</span>Elementary<br><span style="font-size:9px;opacity:0.7">A2</span></button>
-        <button class="level-chip" data-level="L3" onclick="selectLevel('L3')"><span class="lv-code">L3</span>Intermediate<br><span style="font-size:9px;opacity:0.7">B1</span></button>
+        <button class="level-chip" data-level="L1" onclick="selectLevel('L1')"><span class="lv-code">L1</span>Starter<br><span style="font-size:9px;opacity:0.7">A1/N5</span></button>
+        <button class="level-chip" data-level="L2" onclick="selectLevel('L2')"><span class="lv-code">L2</span>Elementary<br><span style="font-size:9px;opacity:0.7">A2/N4</span></button>
+        <button class="level-chip" data-level="L3" onclick="selectLevel('L3')"><span class="lv-code">L3</span>Intermediate<br><span style="font-size:9px;opacity:0.7">B1/N3</span></button>
         <button class="level-chip" data-level="L4" onclick="selectLevel('L4')"><span class="lv-code">L4</span>Upper-Int<br><span style="font-size:9px;opacity:0.7">B2</span></button>
         <button class="level-chip" data-level="L5" onclick="selectLevel('L5')"><span class="lv-code">L5</span>Advanced<br><span style="font-size:9px;opacity:0.7">C1</span></button>
       </div>
     </div>
     <div class="story-config-card">
       <h3>🎭 選擇主題</h3>
-      <div class="genre-grid" id="genreGrid">
-        <!-- 由 JS 動態產生 -->
-      </div>
+      <div class="genre-grid" id="genreGrid"></div>
     </div>
     <button class="story-gen-btn" id="storyGenBtn" onclick="generateStory()">📖 生成故事！</button>
   </div>
 
-  <!-- 故事結果頁 -->
   <div id="storyResult" class="story-result-wrap">
-
-    <!-- 左右欄容器：直向/小螢幕上下，橫向/大螢幕左右 -->
     <div class="story-layout">
-
-      <!-- 左欄：插圖 -->
       <div class="story-left">
         <div id="storyImageArea">
           <button class="story-img-btn" onclick="generateStoryImage()">🎨 生成故事插圖</button>
         </div>
       </div>
-
-      <!-- 右欄：故事內容 -->
       <div class="story-right">
         <div class="story-result-card">
           <div class="story-title" id="storyTitle"></div>
@@ -179,8 +197,6 @@
         </div>
       </div>
     </div>
-
-    <!-- 下方：單字表 + 返回 -->
     <div class="vocab-section">
       <h3>📝 Key Vocabulary</h3>
       <div id="vocabList"></div>
@@ -201,5 +217,30 @@
 
 <script src="api.js"></script>
 <script src="app.js"></script>
+<script>
+// 根據語言顯示/隱藏新增單字區塊
+function updateAddSection() {
+  const isJa = state.lang === 'ja';
+  document.getElementById('addEnSection').style.display = isJa ? 'none' : 'block';
+  document.getElementById('addJaSection').style.display = isJa ? 'block' : 'none';
+  // 日文模式隱藏 L4/L5
+  const levelGrid = document.getElementById('levelGrid');
+  if (levelGrid) {
+    levelGrid.querySelectorAll('[data-level="L4"],[data-level="L5"]').forEach(btn => {
+      btn.style.display = isJa ? 'none' : '';
+    });
+  }
+}
+// 每次切換語言後呼叫
+const _origSwitchLang = switchLang;
+window.switchLang = function(lang) {
+  _origSwitchLang(lang);
+  updateAddSection();
+  renderGenreGrid(storyState.level);
+};
+// 初始化
+updateAddSection();
+renderGenreGrid(storyState.level);
+</script>
 </body>
 </html>
