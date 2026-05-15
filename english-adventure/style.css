@@ -286,6 +286,28 @@ body { font-family: 'Nunito', sans-serif; background: var(--bg); color: var(--te
 .hira-opt-btn.wrong-opt { border-color: var(--red); background: #FFEBEE; color: var(--red); }
 .hira-opt-btn:disabled { cursor: default; }
 
+/* REVIEW BANNER */
+.review-banner { background: linear-gradient(135deg, #FF8A65, #FF5722); color: white; border-radius: 14px; padding: 14px 18px; margin-bottom: 14px; font-size: 14px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 12px rgba(255,87,34,0.3); transition: all 0.15s; }
+.review-banner:active { transform: scale(0.98); }
+.review-banner strong { font-size: 18px; }
+
+/* SETTINGS */
+.settings-card { background: white; border-radius: 20px; padding: 18px; box-shadow: 0 3px 12px rgba(0,0,0,0.07); margin-bottom: 14px; }
+.settings-card h3 { font-size: 16px; font-weight: 800; margin-bottom: 14px; display: flex; align-items: center; gap: 6px; }
+.settings-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; }
+.settings-label { font-size: 14px; font-weight: 700; color: var(--text); }
+.settings-control { display: flex; align-items: center; gap: 8px; }
+
+/* HIRAGANA OVERVIEW */
+.hira-overview { background: white; border-radius: 16px; padding: 14px; margin-bottom: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.hira-overview-row { display: flex; gap: 6px; margin-bottom: 6px; justify-content: center; }
+.hira-overview-cell { border: 2px solid #FCE4EC; background: white; border-radius: 10px; width: 52px; height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: all 0.15s; font-family: 'Nunito', sans-serif; padding: 0; }
+.hira-overview-cell.empty { border-color: transparent; background: transparent; cursor: default; }
+.hira-overview-cell.practiced { background: #FCE4EC; border-color: var(--pink); }
+.hira-overview-cell:active { transform: scale(0.92); }
+.hira-ov-char { font-size: 20px; line-height: 1.2; }
+.hira-ov-romaji { font-size: 9px; color: var(--text-soft); font-weight: 700; }
+
 /* UTILS */
 .toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(20px); background: rgba(30,30,30,0.88); color: white; padding: 10px 22px; border-radius: 20px; font-size: 14px; font-weight: 700; opacity: 0; transition: all 0.3s; pointer-events: none; z-index: 999; white-space: nowrap; }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
