@@ -6,13 +6,18 @@ let state = {
   hiragana: {},
   enXp: 0,
   jaXp: 0,
-  xp: 0, // 保留相容舊版，載入時合併
+  xp: 0,
   totalQuizzes: 0,
   totalCorrect: 0,
-  wrongWords: {},
+  wrongWords: { en: {}, ja: {} },
+  settings: {
+    dailyReviewCount: 5,
+    scriptUrl: 'https://script.google.com/macros/s/AKfycbzHmM7yXQskkWHKXF0B-obIJrMAhuKCdKaSDZnhjZUOogYykrlJSq762CeD5YlQt560/exec',
+    secret: '5566',
+  }
 };
 
-const LEVELS = [
+const EN_LEVELS = [
   { name: '🌱 英語新芽', min: 0 },
   { name: '🐛 努力學習者', min: 100 },
   { name: '🦋 單字探險家', min: 250 },
@@ -20,6 +25,17 @@ const LEVELS = [
   { name: '🔥 句子大師', min: 900 },
   { name: '👑 英語冒險王', min: 1500 },
 ];
+
+const JA_LEVELS = [
+  { name: '🌱 日語新芽', min: 0 },
+  { name: '🐛 努力學習者', min: 100 },
+  { name: '🦋 單字探險家', min: 250 },
+  { name: '⭐ 日語小勇士', min: 500 },
+  { name: '🔥 句子大師', min: 900 },
+  { name: '👑 日語冒險王', min: 1500 },
+];
+
+function getLevels() { return state.lang === 'ja' ? JA_LEVELS : EN_LEVELS; }
 
 // 50音順序
 const HIRAGANA_ROWS = [
@@ -49,10 +65,8 @@ const HIRAGANA_ROMAJI = {
   'わ':'wa','を':'wo','ん':'n',
 };
 
-function getCurrentXp() { return state.lang === 'ja' ? state.jaXp : state.enXp; }
-function setCurrentXp(val) { if (state.lang === 'ja') state.jaXp = val; else state.enXp = val; }
-
 function getLevel(xp) {
+  const LEVELS = getLevels();
   let idx = 0;
   for (let i = LEVELS.length - 1; i >= 0; i--) { if (xp >= LEVELS[i].min) { idx = i; break; } }
   const lv = LEVELS[idx], next = LEVELS[idx + 1];
@@ -73,10 +87,29 @@ function load() {
       state = { ...state, ...loaded };
       delete state.sentences;
       // 舊版 xp 遷移到 enXp
-      if (state.xp && !state.enXp) { state.enXp = state.xp; }
+      if (state.xp && !state.enXp) state.enXp = state.xp;
       state.xp = 0;
+      // 舊版 wrongWords 遷移（舊版是 {word: count}，新版是 {en:{}, ja:{}}）
+      if (state.wrongWords && !state.wrongWords.en) {
+        state.wrongWords = { en: state.wrongWords, ja: {} };
+      }
+      // 確保 settings 有預設值
+      state.settings = { ...state.settings, ...loaded.settings };
     }
   } catch(e) {}
+}
+
+function getCurrentXp() { return state.lang === 'ja' ? state.jaXp : state.enXp; }
+function setCurrentXp(val) { if (state.lang === 'ja') state.jaXp = val; else state.enXp = val; }
+
+// 今日複習單字
+function getDueWords() {
+  const now = Date.now();
+  const words = state.lang === 'ja' ? state.jaWords : state.words;
+  return words
+    .filter(w => w.nextReview <= now)
+    .sort((a, b) => a.nextReview - b.nextReview)
+    .slice(0, state.settings.dailyReviewCount);
 }
 
 // ==================== IMPORT / EXPORT ====================
@@ -150,6 +183,7 @@ function switchLang(lang) {
 
 function renderNav() {
   const nav = document.getElementById('mainNav');
+  const settingsBtn = `<button class="nav-btn" onclick="showScreen('settings')" id="nav-settings"><span class="icon">⚙️</span>設定</button>`;
   if (state.lang === 'en') {
     nav.innerHTML = `
       <button class="nav-btn active" onclick="showScreen('home')" id="nav-home"><span class="icon">🏠</span>首頁</button>
@@ -157,7 +191,8 @@ function renderNav() {
       <button class="nav-btn" onclick="showScreen('add')" id="nav-add"><span class="icon">➕</span>新增</button>
       <button class="nav-btn" onclick="showScreen('quiz')" id="nav-quiz"><span class="icon">🎯</span>測驗</button>
       <button class="nav-btn" onclick="showScreen('story')" id="nav-story"><span class="icon">📚</span>故事</button>
-      <button class="nav-btn" onclick="showScreen('wrong')" id="nav-wrong"><span class="icon">❌</span>錯題本</button>`;
+      <button class="nav-btn" onclick="showScreen('wrong')" id="nav-wrong"><span class="icon">❌</span>錯題本</button>
+      ${settingsBtn}`;
   } else {
     nav.innerHTML = `
       <button class="nav-btn active" onclick="showScreen('home')" id="nav-home"><span class="icon">🏠</span>首頁</button>
@@ -165,7 +200,8 @@ function renderNav() {
       <button class="nav-btn" onclick="showScreen('words')" id="nav-words"><span class="icon">📖</span>單字庫</button>
       <button class="nav-btn" onclick="showScreen('quiz')" id="nav-quiz"><span class="icon">🎯</span>測驗</button>
       <button class="nav-btn" onclick="showScreen('story')" id="nav-story"><span class="icon">📚</span>故事</button>
-      <button class="nav-btn" onclick="showScreen('wrong')" id="nav-wrong"><span class="icon">❌</span>錯題本</button>`;
+      <button class="nav-btn" onclick="showScreen('wrong')" id="nav-wrong"><span class="icon">❌</span>錯題本</button>
+      ${settingsBtn}`;
   }
 }
 
@@ -184,6 +220,7 @@ function showScreen(name) {
   if (name === 'quiz')     resetQuiz();
   if (name === 'story')    renderGenreGrid(storyState.level);
   if (name === 'hiragana') renderHiraganaScreen();
+  if (name === 'settings') renderSettings();
 }
 
 function updateHome() {
@@ -197,6 +234,20 @@ function updateHome() {
   document.getElementById('statWords').textContent = state.lang === 'en' ? state.words.length : state.jaWords.length;
   document.getElementById('statQuizzes').textContent = state.totalQuizzes;
   document.getElementById('statCorrect').textContent = state.totalCorrect;
+
+  // 今日複習提醒
+  const due = getDueWords();
+  const reviewBanner = document.getElementById('reviewBanner');
+  if (reviewBanner) {
+    if (due.length > 0) {
+      reviewBanner.style.display = 'block';
+      reviewBanner.innerHTML = `<div class="review-banner" onclick="startReviewQuiz()">
+        🔔 今天有 <strong>${due.length}</strong> 個單字需要複習！點此開始 →
+      </div>`;
+    } else {
+      reviewBanner.style.display = 'none';
+    }
+  }
 }
 
 function showToast(msg) {
@@ -268,13 +319,14 @@ function renderWordList() {
 
 function renderWrong() {
   const container = document.getElementById('wrongContainer');
-  const entries = Object.entries(state.wrongWords).filter(([,v]) => v > 0);
+  const isJa = state.lang === 'ja';
+  const wrongMap = isJa ? (state.wrongWords.ja || {}) : (state.wrongWords.en || {});
+  const entries = Object.entries(wrongMap).filter(([,v]) => v > 0);
   if (!entries.length) {
     container.innerHTML = `<div class="empty-state"><div class="emoji">🎉</div><p>還沒有錯誤記錄，繼續加油！</p></div>`;
     return;
   }
   entries.sort((a,b) => b[1]-a[1]);
-  const isJa = state.lang === 'ja';
   container.innerHTML = entries.map(([key, count]) => {
     const w = isJa ? state.jaWords.find(x => x.word === key) : state.words.find(x => x.en === key);
     return `<div class="wrong-item">
@@ -409,6 +461,7 @@ function renderHiraganaScreen() {
         <button class="hira-mode-btn ${hiraganaState.mode==='quiz'?'active':''}" onclick="setHiraMode('quiz')">🎯 測驗模式</button>
       </div>
     </div>
+    <div class="hira-overview">${renderHiraganaOverview()}</div>
     <div id="hiraganaContent"></div>`;
   if (hiraganaState.mode === 'practice') renderHiraganaPractice();
   else renderHiraganaQuiz();
@@ -623,7 +676,8 @@ function checkHiraAnswer(correct) {
   } else {
     fb.className = 'feedback-box wrong';
     fb.innerHTML = `<div class="feedback-emoji">💪</div><div class="feedback-text">再加油！</div><div class="feedback-answer">正確答案：${correct}（${HIRAGANA_ROMAJI[correct]}）</div>`;
-    state.wrongWords[correct] = (state.wrongWords[correct] || 0) + 1;
+    state.wrongWords.ja = state.wrongWords.ja || {};
+    state.wrongWords.ja[correct] = (state.wrongWords.ja[correct] || 0) + 1;
   }
   document.getElementById('hiraCheckBtn').style.display = 'none';
   document.getElementById('hiraNextBtn').style.display = 'block';
@@ -829,7 +883,9 @@ function checkAnswer() {
     document.getElementById('feedbackAnswer').textContent = `正確答案：${correct}`;
     if (q.type === 'spelling') {
       q.word.streak = 0; q.word.nextReview = Date.now() + 600000;
-      state.wrongWords[getWordKey(q.word)] = (state.wrongWords[getWordKey(q.word)] || 0) + 1;
+      const lang = state.lang === 'ja' ? 'ja' : 'en';
+      if (!state.wrongWords[lang]) state.wrongWords[lang] = {};
+      state.wrongWords[lang][getWordKey(q.word)] = (state.wrongWords[lang][getWordKey(q.word)] || 0) + 1;
     }
   }
   document.getElementById('checkBtn').style.display = 'none';
@@ -858,6 +914,31 @@ function resetQuiz() {
   document.getElementById('quizMenu').style.display = 'block';
   document.getElementById('quizPlay').classList.remove('active');
   document.getElementById('quizResult').classList.remove('active');
+}
+
+async function startReviewQuiz() {
+  const due = getDueWords();
+  if (!due.length) { showToast('今天沒有需要複習的單字！'); return; }
+  showScreen('quiz');
+  quiz.type = 'review'; quiz.questions = []; quiz.idx = 0; quiz.correct = 0;
+  document.getElementById('quizMenu').style.display = 'none';
+  document.getElementById('quizPlay').classList.add('active');
+  document.getElementById('questionCard').innerHTML = `<div style="padding:30px 0;text-align:center;color:var(--text-soft)"><span class="loading-dots" style="color:var(--sky-dark)"><span></span><span></span><span></span></span><br><br>準備複習題目中...</div>`;
+  document.getElementById('checkBtn').style.display = 'none';
+  document.getElementById('nextBtn').style.display = 'none';
+  document.getElementById('feedbackBox').style.display = 'none';
+
+  const qs = due.map(w => ({ type: 'spelling', word: w }));
+  // 有句子的加入克漏字
+  const withSentence = due.filter(w => w.sentence);
+  if (withSentence.length) {
+    for (const w of withSentence.slice(0, 3)) {
+      const q = await buildClozeQuestion(w);
+      if (q) qs.push(q);
+    }
+  }
+  quiz.questions = qs.sort(() => Math.random() - 0.5);
+  renderQuestion();
 }
 
 // ==================== STORY ====================
@@ -1116,6 +1197,90 @@ function stopReading() {
 
 function clearHighlight() {
   document.querySelectorAll('.story-sent.speaking').forEach(el => el.classList.remove('speaking'));
+}
+
+// ==================== 50音總覽 ====================
+function renderHiraganaOverview() {
+  const content = document.getElementById('hiraganaContent');
+  const rows = HIRAGANA_ROWS;
+  const table = rows.map(row =>
+    `<div class="hira-overview-row">${row.map(char => {
+      if (!char) return `<div class="hira-overview-cell empty"></div>`;
+      const data = state.hiragana[char];
+      const practiced = data?.practiced;
+      const romaji = HIRAGANA_ROMAJI[char] || '';
+      return `<button class="hira-overview-cell ${practiced ? 'practiced' : ''}" onclick="jumpToChar('${char}')">
+        <span class="hira-ov-char">${char}</span>
+        <span class="hira-ov-romaji">${romaji}</span>
+      </button>`;
+    }).join('')}</div>`
+  ).join('');
+  return table;
+}
+
+function jumpToChar(char) {
+  const idx = HIRAGANA_FLAT.indexOf(char);
+  if (idx === -1) return;
+  hiraganaState.currentIdx = idx;
+  hiraganaState.mode = 'practice';
+  renderHiraganaScreen();
+}
+
+// ==================== 設定頁 ====================
+function renderSettings() {
+  const screen = document.getElementById('screen-settings');
+  if (!screen) return;
+  const s = state.settings;
+  screen.innerHTML = `
+    <div class="settings-card">
+      <h3>📚 學習設定</h3>
+      <div class="settings-row">
+        <div class="settings-label">每日複習單字數</div>
+        <div class="settings-control">
+          <input type="number" id="settingReviewCount" value="${s.dailyReviewCount}" min="1" max="20"
+            style="width:60px;border:2px solid #E3F2FD;border-radius:10px;padding:8px;font-family:'Nunito',sans-serif;font-size:16px;font-weight:800;text-align:center;color:var(--text);outline:none">
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-card">
+      <h3>🔗 API 設定</h3>
+      <div class="input-group">
+        <label>Script 網址</label>
+        <input type="text" id="settingScriptUrl" value="${s.scriptUrl}"
+          style="-webkit-user-select:auto;user-select:auto" placeholder="https://script.google.com/...">
+      </div>
+      <div class="input-group">
+        <label>密碼</label>
+        <input type="text" id="settingSecret" value="${s.secret}"
+          style="-webkit-user-select:auto;user-select:auto" placeholder="5566">
+      </div>
+    </div>
+
+    <button class="submit-btn" onclick="saveSettings()" style="margin-bottom:14px">💾 儲存設定</button>
+
+    <div class="settings-card" style="border-top:3px solid var(--red)">
+      <h3>⚠️ 危險操作</h3>
+      <button onclick="clearAllData()" style="width:100%;background:#FFEBEE;color:var(--red);border:none;border-radius:12px;padding:13px;font-family:'Nunito',sans-serif;font-size:14px;font-weight:800;cursor:pointer">
+        🗑 清除所有資料
+      </button>
+    </div>`;
+}
+
+function saveSettings() {
+  state.settings.dailyReviewCount = parseInt(document.getElementById('settingReviewCount').value) || 5;
+  state.settings.scriptUrl = document.getElementById('settingScriptUrl').value.trim();
+  state.settings.secret = document.getElementById('settingSecret').value.trim();
+  save();
+  showToast('✅ 設定已儲存！');
+  updateHome();
+}
+
+function clearAllData() {
+  if (!confirm('確定要清除所有資料？這個動作無法復原！')) return;
+  if (!confirm('再次確認：所有單字、進度、XP 都會消失！')) return;
+  localStorage.removeItem('ea_state');
+  location.reload();
 }
 
 // ==================== SOUND + CONFETTI ====================
