@@ -72,11 +72,14 @@ body { font-family: 'Nunito', sans-serif; background: var(--bg); color: var(--te
 /* WORD LIST */
 .search-bar { background: white; border-radius: 14px; padding: 10px 14px; display: flex; align-items: center; gap: 10px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
 .search-bar input { border: none; outline: none; font-family: 'Nunito', sans-serif; font-size: 15px; width: 100%; color: var(--text); background: transparent; }
-.word-item { background: white; border-radius: 16px; padding: 14px 16px; margin-bottom: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; align-items: center; gap: 12px; }
+.word-item { background: white; border-radius: 16px; padding: 14px 16px; margin-bottom: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+.word-item-card { padding: 14px 16px; }
+.word-item-top { display: flex; align-items: center; gap: 12px; }
 .word-item-icon { font-size: 28px; width: 40px; text-align: center; flex-shrink: 0; }
 .word-info { flex: 1; min-width: 0; }
 .word-en { font-size: 18px; font-weight: 800; color: var(--text); }
 .word-zh { font-size: 13px; color: var(--text-soft); margin-top: 1px; }
+.word-sentence-full { font-size: 13px; color: #5C7A9F; margin-top: 8px; padding-top: 8px; border-top: 1px solid #EEF2F7; font-style: italic; line-height: 1.6; display: flex; align-items: flex-start; gap: 8px; }
 .word-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
 .word-streak { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 10px; }
 .streak-new { background: #E3F2FD; color: #1565C0; }
@@ -170,10 +173,11 @@ body { font-family: 'Nunito', sans-serif; background: var(--bg); color: var(--te
 .story-header-card p { font-size: 13px; opacity: 0.9; line-height: 1.5; }
 .story-config-card { background: white; border-radius: 20px; padding: 18px; box-shadow: 0 3px 12px rgba(0,0,0,0.07); margin-bottom: 14px; }
 .story-config-card h3 { font-size: 15px; font-weight: 800; margin-bottom: 12px; }
-.level-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
-.level-chip { border: 2px solid #E0F7FA; background: white; border-radius: 10px; padding: 8px 4px; text-align: center; cursor: pointer; transition: all 0.15s; font-family: 'Nunito', sans-serif; font-size: 11px; font-weight: 800; color: var(--teal-dark); }
+.level-grid { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 4px; }
+.level-grid::-webkit-scrollbar { display: none; }
+.level-chip { border: 2px solid #E0F7FA; background: white; border-radius: 10px; padding: 10px 8px; text-align: center; cursor: pointer; transition: all 0.15s; font-family: 'Nunito', sans-serif; font-size: 11px; font-weight: 800; color: var(--teal-dark); flex-shrink: 0; min-width: 72px; }
 .level-chip.selected { border-color: var(--teal-dark); background: #E0F7FA; }
-.level-chip .lv-code { font-size: 14px; font-weight: 900; display: block; margin-bottom: 2px; }
+.level-chip .lv-code { font-size: 15px; font-weight: 900; display: block; margin-bottom: 2px; }
 .genre-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .genre-section-label { font-size: 11px; font-weight: 700; color: var(--text-soft); text-transform: uppercase; letter-spacing: 0.5px; margin: 8px 0 4px; grid-column: 1 / -1; }
 .genre-chip { border: 2px solid #E0F7FA; background: white; border-radius: 12px; padding: 10px 8px; cursor: pointer; transition: all 0.15s; font-family: 'Nunito', sans-serif; text-align: center; }
