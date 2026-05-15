@@ -1,10 +1,12 @@
 // ==================== STATE ====================
 let state = {
-  lang: 'en',           // 目前語言：'en' 或 'ja'
-  words: [],            // 英文單字庫
-  jaWords: [],          // 日文單字庫
-  hiragana: {},         // 50音進度 { 'あ': { word:'あめ', kanji:'雨', zh:'雨', emoji:'🌧️', practiced: true } }
-  xp: 0,
+  lang: 'en',
+  words: [],
+  jaWords: [],
+  hiragana: {},
+  enXp: 0,
+  jaXp: 0,
+  xp: 0, // 保留相容舊版，載入時合併
   totalQuizzes: 0,
   totalCorrect: 0,
   wrongWords: {},
@@ -47,6 +49,9 @@ const HIRAGANA_ROMAJI = {
   'わ':'wa','を':'wo','ん':'n',
 };
 
+function getCurrentXp() { return state.lang === 'ja' ? state.jaXp : state.enXp; }
+function setCurrentXp(val) { if (state.lang === 'ja') state.jaXp = val; else state.enXp = val; }
+
 function getLevel(xp) {
   let idx = 0;
   for (let i = LEVELS.length - 1; i >= 0; i--) { if (xp >= LEVELS[i].min) { idx = i; break; } }
@@ -67,6 +72,9 @@ function load() {
       const loaded = JSON.parse(s);
       state = { ...state, ...loaded };
       delete state.sentences;
+      // 舊版 xp 遷移到 enXp
+      if (state.xp && !state.enXp) { state.enXp = state.xp; }
+      state.xp = 0;
     }
   } catch(e) {}
 }
@@ -179,11 +187,12 @@ function showScreen(name) {
 }
 
 function updateHome() {
-  const lv = getLevel(state.xp);
+  const xp = getCurrentXp();
+  const lv = getLevel(xp);
   document.getElementById('heroLevelName').textContent = lv.name;
   document.getElementById('heroXpBar').style.width = lv.pct + '%';
   document.getElementById('heroXpLabel').textContent = lv.label;
-  document.getElementById('headerXP').textContent = state.xp;
+  document.getElementById('headerXP').textContent = xp;
   document.getElementById('headerLevel').textContent = lv.num;
   document.getElementById('statWords').textContent = state.lang === 'en' ? state.words.length : state.jaWords.length;
   document.getElementById('statQuizzes').textContent = state.totalQuizzes;
@@ -217,38 +226,42 @@ function renderWordList() {
     const sc = (w.streak||0) >= 5 ? 'streak-great' : (w.streak||0) >= 2 ? 'streak-good' : 'streak-new';
     const sl = (w.streak||0) >= 5 ? '🌟 熟練' : (w.streak||0) >= 2 ? '✅ 還不錯' : '🆕 新字';
     if (isJa) {
-      return `<div class="word-item">
+      return `<div class="word-item word-item-card">
+        <div class="word-item-top">
+          <div class="word-item-icon">${icons[i % icons.length]}</div>
+          <div class="word-info">
+            <div class="word-en">${w.word} <span style="font-size:13px;color:#90A4AE">${w.reading||''}</span> ${w.pos ? `<span style="font-size:12px;color:#90A4AE;font-weight:600">${w.pos}</span>` : ''}</div>
+            <div class="word-zh">${w.zh}</div>
+          </div>
+          <div class="word-meta">
+            <span class="word-streak ${sc}">${sl}</span>
+            <button class="speak-btn" onclick="speak('${esc(w.word)}','ja-JP')">🔊</button>
+          </div>
+          <button class="delete-btn" onclick="deleteJaWord(${state.jaWords.indexOf(w)})">🗑</button>
+        </div>
+        ${w.sentence ? `<div class="word-sentence-full">
+          ${w.sentence}
+          <button class="speak-btn" style="width:26px;height:26px;font-size:12px;flex-shrink:0" onclick="speak('${esc(w.sentence)}','ja-JP')">🔊</button>
+        </div>` : ''}
+      </div>`;
+    }
+    return `<div class="word-item word-item-card">
+      <div class="word-item-top">
         <div class="word-item-icon">${icons[i % icons.length]}</div>
         <div class="word-info">
-          <div class="word-en">${w.word} <span style="font-size:13px;color:#90A4AE">${w.reading||''}</span> ${w.pos ? `<span style="font-size:12px;color:#90A4AE;font-weight:600">${w.pos}</span>` : ''}</div>
+          <div class="word-en">${w.en} ${w.pos ? `<span style="font-size:12px;color:#90A4AE;font-weight:600">${w.pos}</span>` : ''}</div>
           <div class="word-zh">${w.zh}</div>
-          ${w.sentence ? `<div class="word-sentence" style="display:flex;align-items:center;gap:6px">
-            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${w.sentence}</span>
-            <button class="speak-btn" style="flex-shrink:0;width:28px;height:28px;font-size:13px" onclick="speak('${esc(w.sentence)}','ja-JP')">🔊</button>
-          </div>` : ''}
         </div>
         <div class="word-meta">
           <span class="word-streak ${sc}">${sl}</span>
-          <button class="speak-btn" onclick="speak('${esc(w.word)}','ja-JP')">🔊</button>
+          <button class="speak-btn" onclick="speak('${esc(w.en)}')">🔊</button>
         </div>
-        <button class="delete-btn" onclick="deleteJaWord(${state.jaWords.indexOf(w)})">🗑</button>
-      </div>`;
-    }
-    return `<div class="word-item">
-      <div class="word-item-icon">${icons[i % icons.length]}</div>
-      <div class="word-info">
-        <div class="word-en">${w.en} ${w.pos ? `<span style="font-size:12px;color:#90A4AE;font-weight:600">${w.pos}</span>` : ''}</div>
-        <div class="word-zh">${w.zh}</div>
-        ${w.sentence ? `<div class="word-sentence" style="display:flex;align-items:center;gap:6px">
-          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${w.sentence}</span>
-          <button class="speak-btn" style="flex-shrink:0;width:28px;height:28px;font-size:13px" onclick="speak('${esc(w.sentence)}')">🔊</button>
-        </div>` : ''}
+        <button class="delete-btn" onclick="deleteWord(${state.words.indexOf(w)})">🗑</button>
       </div>
-      <div class="word-meta">
-        <span class="word-streak ${sc}">${sl}</span>
-        <button class="speak-btn" onclick="speak('${esc(w.en)}')">🔊</button>
-      </div>
-      <button class="delete-btn" onclick="deleteWord(${state.words.indexOf(w)})">🗑</button>
+      ${w.sentence ? `<div class="word-sentence-full">
+        ${w.sentence}
+        <button class="speak-btn" style="width:26px;height:26px;font-size:12px;flex-shrink:0" onclick="speak('${esc(w.sentence)}')">🔊</button>
+      </div>` : ''}
     </div>`;
   }).join('');
 }
@@ -355,13 +368,14 @@ function deleteJaWord(idx) {
 
 // ==================== XP ====================
 function addXP(amount) {
-  const before = getLevel(state.xp).num;
-  state.xp += amount;
-  const after = getLevel(state.xp).num;
+  const xp = getCurrentXp();
+  const before = getLevel(xp).num;
+  setCurrentXp(xp + amount);
+  const after = getLevel(getCurrentXp()).num;
   save(); updateHome();
-  document.getElementById('headerXP').textContent = state.xp;
+  document.getElementById('headerXP').textContent = getCurrentXp();
   document.getElementById('headerLevel').textContent = after;
-  if (before !== after) { showToast('🎉 升級了！' + getLevel(state.xp).name); confetti(); }
+  if (before !== after) { showToast('🎉 升級了！' + getLevel(getCurrentXp()).name); confetti(); }
 }
 
 // ==================== TTS ====================
@@ -452,8 +466,8 @@ async function renderHiraganaPractice() {
       <div class="hira-write-section">
         <div class="hira-write-label">練習書寫</div>
         <div class="hira-big-canvas-wrap">
-          <canvas id="hiraBigCanvas" class="hira-big-canvas" width="280" height="280"></canvas>
           <div class="hira-big-ghost">${char}</div>
+          <canvas id="hiraBigCanvas" class="hira-big-canvas" width="280" height="280"></canvas>
         </div>
         <button class="hira-clear-btn" onclick="clearBigCanvas()">🗑 清除</button>
       </div>
@@ -688,14 +702,11 @@ async function startQuiz(type) {
     let t = type;
     if (type === 'mixed') {
       const pool = ['spelling'];
-      if (wordsWithSentence.length) pool.push('sentence', 'cloze');
+      if (wordsWithSentence.length) pool.push('cloze');
       t = pool[i % pool.length];
     }
-    if (t === 'spelling') {
+    if (t === 'spelling' || t === 'sentence') {
       qs.push({ type: 'spelling', word: words[i % words.length] });
-    } else if (t === 'sentence') {
-      if (!wordsWithSentence.length) { qs.push({ type: 'spelling', word: words[i % words.length] }); }
-      else { const w = wordsWithSentence[i % wordsWithSentence.length]; qs.push({ type: 'sentence', word: w }); }
     } else if (t === 'cloze') {
       const w = wordsWithSentence[i % Math.max(wordsWithSentence.length,1)] || words[0];
       const q = await buildClozeQuestion(w);
