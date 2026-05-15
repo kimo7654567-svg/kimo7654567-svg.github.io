@@ -420,6 +420,8 @@ async function renderHiraganaPractice() {
       const r = await callScript({ type: 'ja_hiragana_word', char });
       wordData = { word: r.word, kanji: r.kanji || '', zh: r.zh, emoji: r.emoji || '📝', practiced: false };
       state.hiragana[char] = wordData;
+      // 自動加入日文單字庫
+      autoAddHiraganaWord(wordData);
       save();
     } catch(e) {
       wordData = { word: char, kanji: '', zh: '(查詢失敗)', emoji: '❓', practiced: false };
@@ -449,16 +451,11 @@ async function renderHiraganaPractice() {
 
       <div class="hira-write-section">
         <div class="hira-write-label">練習書寫</div>
-        <div class="hira-boxes">
-          <div class="hira-box-wrap">
-            <canvas class="hira-canvas" id="hiraCanvas0" width="80" height="80"></canvas>
-            <div class="hira-ghost">${char}</div>
-          </div>
-          ${[1,2,3,4].map(n => `<canvas class="hira-canvas" id="hiraCanvas${n}" width="80" height="80"></canvas>`).join('')}
+        <div class="hira-big-canvas-wrap">
+          <canvas id="hiraBigCanvas" class="hira-big-canvas" width="280" height="280"></canvas>
+          <div class="hira-big-ghost">${char}</div>
         </div>
-        <div style="display:flex;gap:8px;margin-top:10px">
-          <button class="hira-clear-btn" onclick="clearAllCanvas()">🗑 清除</button>
-        </div>
+        <button class="hira-clear-btn" onclick="clearBigCanvas()">🗑 清除</button>
       </div>
 
       <button class="hira-done-btn" onclick="markHiraganaPracticed('${char}')">
@@ -466,40 +463,56 @@ async function renderHiraganaPractice() {
       </button>
     </div>`;
 
-  // 初始化畫板
-  setTimeout(() => initHiraganaCanvases(), 100);
+  setTimeout(() => initBigCanvas(), 100);
 }
 
-function initHiraganaCanvases() {
-  [0,1,2,3,4].forEach(n => {
-    const canvas = document.getElementById('hiraCanvas' + n);
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    ctx.strokeStyle = '#1A237E';
-    ctx.lineWidth = 3;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    let drawing = false, lastX = 0, lastY = 0;
-    const getPos = (e) => {
-      const rect = canvas.getBoundingClientRect();
-      const touch = e.touches ? e.touches[0] : e;
-      return { x: (touch.clientX - rect.left) * (canvas.width / rect.width), y: (touch.clientY - rect.top) * (canvas.height / rect.height) };
+function autoAddHiraganaWord(wordData) {
+  if (!wordData || !wordData.word || wordData.zh === '(查詢失敗)') return;
+  if (state.jaWords.find(x => x.word === wordData.word)) return;
+  state.jaWords.push({
+    word: wordData.word,
+    reading: wordData.word, // 50音單字本身就是平假名
+    zh: wordData.zh,
+    pos: '名詞',
+    sentence: '',
+    streak: 0,
+    nextReview: Date.now()
+  });
+}
+
+function initBigCanvas() {
+  const canvas = document.getElementById('hiraBigCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  ctx.strokeStyle = '#1A237E';
+  ctx.lineWidth = 5;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  let drawing = false, lastX = 0, lastY = 0;
+  const getPos = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches ? e.touches[0] : e;
+    return {
+      x: (touch.clientX - rect.left) * (canvas.width / rect.width),
+      y: (touch.clientY - rect.top) * (canvas.height / rect.height)
     };
-    canvas.addEventListener('mousedown',  e => { drawing = true; const p = getPos(e); lastX = p.x; lastY = p.y; });
-    canvas.addEventListener('mousemove',  e => { if (!drawing) return; const p = getPos(e); ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(p.x, p.y); ctx.stroke(); lastX = p.x; lastY = p.y; });
-    canvas.addEventListener('mouseup',    () => drawing = false);
-    canvas.addEventListener('touchstart', e => { e.preventDefault(); drawing = true; const p = getPos(e); lastX = p.x; lastY = p.y; }, { passive: false });
-    canvas.addEventListener('touchmove',  e => { e.preventDefault(); if (!drawing) return; const p = getPos(e); ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(p.x, p.y); ctx.stroke(); lastX = p.x; lastY = p.y; }, { passive: false });
-    canvas.addEventListener('touchend',   () => drawing = false);
-  });
+  };
+  canvas.addEventListener('mousedown',  e => { drawing = true; const p = getPos(e); lastX = p.x; lastY = p.y; });
+  canvas.addEventListener('mousemove',  e => { if (!drawing) return; const p = getPos(e); ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(p.x, p.y); ctx.stroke(); lastX = p.x; lastY = p.y; });
+  canvas.addEventListener('mouseup',    () => drawing = false);
+  canvas.addEventListener('mouseleave', () => drawing = false);
+  canvas.addEventListener('touchstart', e => { e.preventDefault(); drawing = true; const p = getPos(e); lastX = p.x; lastY = p.y; }, { passive: false });
+  canvas.addEventListener('touchmove',  e => { e.preventDefault(); if (!drawing) return; const p = getPos(e); ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(p.x, p.y); ctx.stroke(); lastX = p.x; lastY = p.y; }, { passive: false });
+  canvas.addEventListener('touchend',   () => drawing = false);
 }
 
-function clearAllCanvas() {
-  [0,1,2,3,4].forEach(n => {
-    const canvas = document.getElementById('hiraCanvas' + n);
-    if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
-  });
+function clearBigCanvas() {
+  const canvas = document.getElementById('hiraBigCanvas');
+  if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
 }
+
+function initHiraganaCanvases() {} // 保留空函式避免舊參考報錯
+function clearAllCanvas() { clearBigCanvas(); }
 
 function hiraNav(dir) {
   const newIdx = hiraganaState.currentIdx + dir;
