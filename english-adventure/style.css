@@ -13,6 +13,8 @@
   --text-soft: #5C6BC0;
   --teal: #26C6DA;
   --teal-dark: #00838F;
+  --pink: #E91E63;
+  --pink-dark: #880E4F;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 body { font-family: 'Nunito', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; user-select: none; }
@@ -21,14 +23,20 @@ body { font-family: 'Nunito', sans-serif; background: var(--bg); color: var(--te
 .header { background: linear-gradient(135deg, #29B6F6 0%, #0288D1 100%); padding: 14px 20px 10px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; box-shadow: 0 4px 12px rgba(2,136,209,0.3); }
 .header-title { font-family: 'Baloo 2', cursive; font-size: 22px; font-weight: 800; color: white; text-shadow: 0 2px 4px rgba(0,0,0,0.2); }
 .header-title span { color: var(--sun); }
-.header-right { display: flex; align-items: center; gap: 12px; }
+.header-right { display: flex; align-items: center; gap: 10px; }
 .xp-badge { background: rgba(255,255,255,0.2); border-radius: 20px; padding: 5px 12px; display: flex; align-items: center; gap: 6px; color: white; font-weight: 800; font-size: 14px; }
 .level-badge { background: var(--sun); border-radius: 20px; padding: 5px 12px; font-weight: 900; font-size: 13px; color: #7B3F00; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
+
+/* 語言切換 */
+.lang-switcher { display: flex; gap: 4px; background: rgba(255,255,255,0.15); border-radius: 12px; padding: 3px; }
+.lang-flag { background: transparent; border: none; font-size: 20px; cursor: pointer; border-radius: 8px; padding: 3px 5px; transition: all 0.15s; opacity: 0.6; }
+.lang-flag.active { background: rgba(255,255,255,0.3); opacity: 1; transform: scale(1.1); }
+.lang-flag:active { transform: scale(0.95); }
 
 /* NAV */
 .nav { display: flex; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow-x: auto; scrollbar-width: none; }
 .nav::-webkit-scrollbar { display: none; }
-.nav-btn { flex: 1; min-width: 70px; padding: 10px 4px 8px; border: none; background: none; display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; color: #9E9E9E; font-family: 'Nunito', sans-serif; font-size: 10px; font-weight: 700; transition: all 0.2s; position: relative; }
+.nav-btn { flex: 1; min-width: 65px; padding: 10px 4px 8px; border: none; background: none; display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; color: #9E9E9E; font-family: 'Nunito', sans-serif; font-size: 10px; font-weight: 700; transition: all 0.2s; position: relative; }
 .nav-btn .icon { font-size: 20px; }
 .nav-btn.active { color: var(--sky-dark); }
 .nav-btn.active::after { content: ''; position: absolute; bottom: 0; left: 20%; right: 20%; height: 3px; background: var(--sky-dark); border-radius: 3px 3px 0 0; }
@@ -150,12 +158,6 @@ body { font-family: 'Nunito', sans-serif; background: var(--bg); color: var(--te
 .result-xp { font-size: 18px; font-weight: 800; color: var(--grass-dark); margin-bottom: 20px; }
 .result-back-btn { background: linear-gradient(135deg, #29B6F6, #0288D1); color: white; border: none; border-radius: 14px; padding: 14px 32px; font-family: 'Nunito', sans-serif; font-size: 16px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 12px rgba(2,136,209,0.3); }
 
-.story-zh-toggle { background: #F3E5F5; color: var(--purple-dark); border: none; border-radius: 10px; padding: 8px 16px; font-family: 'Nunito', sans-serif; font-size: 13px; font-weight: 800; cursor: pointer; margin-top: 16px; display: block; transition: all 0.15s; }
-.story-zh-toggle:active { transform: scale(0.97); }
-.story-zh-content { margin-top: 10px; padding: 14px 16px; background: #FAF5FF; border-radius: 14px; border-left: 4px solid var(--purple); }
-.story-zh-content p { font-size: 14px; line-height: 1.9; color: #4A235A; margin-bottom: 10px; }
-.story-zh-content p:last-child { margin-bottom: 0; }
-
 /* WRONG */
 .wrong-item { background: white; border-radius: 16px; padding: 14px 16px; margin-bottom: 10px; border-left: 4px solid var(--red); box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
 .wrong-en { font-size: 18px; font-weight: 800; }
@@ -171,7 +173,7 @@ body { font-family: 'Nunito', sans-serif; background: var(--bg); color: var(--te
 .level-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
 .level-chip { border: 2px solid #E0F7FA; background: white; border-radius: 10px; padding: 8px 4px; text-align: center; cursor: pointer; transition: all 0.15s; font-family: 'Nunito', sans-serif; font-size: 11px; font-weight: 800; color: var(--teal-dark); }
 .level-chip.selected { border-color: var(--teal-dark); background: #E0F7FA; }
-.level-chip .lv-code { font-size: 15px; font-weight: 900; display: block; margin-bottom: 2px; }
+.level-chip .lv-code { font-size: 14px; font-weight: 900; display: block; margin-bottom: 2px; }
 .genre-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .genre-section-label { font-size: 11px; font-weight: 700; color: var(--text-soft); text-transform: uppercase; letter-spacing: 0.5px; margin: 8px 0 4px; grid-column: 1 / -1; }
 .genre-chip { border: 2px solid #E0F7FA; background: white; border-radius: 12px; padding: 10px 8px; cursor: pointer; transition: all 0.15s; font-family: 'Nunito', sans-serif; text-align: center; }
@@ -182,91 +184,20 @@ body { font-family: 'Nunito', sans-serif; background: var(--bg); color: var(--te
 .story-gen-btn { width: 100%; background: linear-gradient(135deg, #26C6DA, #00838F); color: white; border: none; border-radius: 14px; padding: 14px; font-family: 'Nunito', sans-serif; font-size: 16px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 12px rgba(0,131,143,0.3); transition: all 0.15s; }
 .story-gen-btn:active { transform: scale(0.98); }
 .story-gen-btn:disabled { opacity: 0.6; }
-
-/* 故事結果：上下 / 左右 layout */
 .story-result-wrap { display: none; }
 .story-result-wrap.active { display: block; }
-
-/* 預設：直向（上下排列） */
-.story-layout {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin-bottom: 14px;
-}
-
-/* 橫向或寬螢幕（768px+）：左右並排 */
+.story-layout { display: flex; flex-direction: column; gap: 14px; margin-bottom: 14px; }
 @media (min-width: 768px), (orientation: landscape) and (min-width: 600px) {
-  .story-layout {
-    flex-direction: row;
-    align-items: flex-start;
-  }
-  .story-left {
-    width: 45%;
-    flex-shrink: 0;
-    position: sticky;
-    top: 80px; /* 貼著 header 下方 */
-  }
-  .story-right {
-    flex: 1;
-    min-width: 0;
-  }
+  .story-layout { flex-direction: row; align-items: flex-start; }
+  .story-left { width: 45%; flex-shrink: 0; position: sticky; top: 80px; }
+  .story-right { flex: 1; min-width: 0; }
 }
-
-/* 圖片區域 */
-#storyImageArea {
-  background: white;
-  border-radius: 20px;
-  overflow: hidden;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
-  min-height: 200px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.story-img {
-  width: 100%;
-  height: auto;
-  display: block;
-  border-radius: 20px;
-}
-
-.story-img-btn {
-  background: linear-gradient(135deg, #26C6DA, #00838F);
-  color: white;
-  border: none;
-  border-radius: 14px;
-  padding: 16px 24px;
-  font-family: 'Nunito', sans-serif;
-  font-size: 15px;
-  font-weight: 800;
-  cursor: pointer;
-  transition: all 0.15s;
-  box-shadow: 0 4px 12px rgba(0,131,143,0.3);
-  margin: 20px;
-}
+#storyImageArea { background: white; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.1); min-height: 200px; display: flex; align-items: center; justify-content: center; }
+.story-img { width: 100%; height: auto; display: block; border-radius: 20px; }
+.story-img-btn { background: linear-gradient(135deg, #26C6DA, #00838F); color: white; border: none; border-radius: 14px; padding: 16px 24px; font-family: 'Nunito', sans-serif; font-size: 15px; font-weight: 800; cursor: pointer; transition: all 0.15s; box-shadow: 0 4px 12px rgba(0,131,143,0.3); margin: 20px; }
 .story-img-btn:active { transform: scale(0.97); }
-
-.story-img-loading {
-  text-align: center;
-  padding: 40px 20px;
-  color: var(--teal-dark);
-  font-weight: 700;
-  font-size: 14px;
-  line-height: 2;
-}
-
-.story-img-error {
-  text-align: center;
-  padding: 30px 20px;
-  color: var(--red);
-  font-weight: 700;
-  font-size: 14px;
-  line-height: 1.8;
-}
-
-/* 故事內容卡片 */
+.story-img-loading { text-align: center; padding: 40px 20px; color: var(--teal-dark); font-weight: 700; font-size: 14px; line-height: 2; }
+.story-img-error { text-align: center; padding: 30px 20px; color: var(--red); font-weight: 700; font-size: 14px; line-height: 1.8; }
 .story-result-card { background: white; border-radius: 20px; padding: 20px; box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
 .story-title { font-family: 'Baloo 2', cursive; font-size: 20px; font-weight: 800; color: var(--text); margin-bottom: 6px; }
 .story-meta { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
@@ -281,10 +212,13 @@ body { font-family: 'Nunito', sans-serif; background: var(--bg); color: var(--te
 .story-sent { cursor: pointer; border-radius: 6px; padding: 1px 3px; transition: background 0.15s; }
 .story-sent:hover { background: #E0F7FA; }
 .story-sent.speaking { background: #B2EBF2; border-bottom: 2px solid var(--teal-dark); }
+.story-zh-toggle { background: #F3E5F5; color: var(--purple-dark); border: none; border-radius: 10px; padding: 8px 16px; font-family: 'Nunito', sans-serif; font-size: 13px; font-weight: 800; cursor: pointer; margin-top: 16px; display: block; transition: all 0.15s; }
+.story-zh-toggle:active { transform: scale(0.97); }
+.story-zh-content { margin-top: 10px; padding: 14px 16px; background: #FAF5FF; border-radius: 14px; border-left: 4px solid var(--purple); }
+.story-zh-content p { font-size: 14px; line-height: 1.9; color: #4A235A; margin-bottom: 10px; }
+.story-zh-content p:last-child { margin-bottom: 0; }
 .cultural-note { background: #FFF9C4; border-left: 4px solid #F9A825; border-radius: 12px; padding: 12px 14px; margin-top: 14px; font-size: 13px; color: #5D4037; font-weight: 600; line-height: 1.6; }
 .cultural-note strong { display: block; margin-bottom: 4px; font-size: 11px; text-transform: uppercase; color: #F9A825; }
-
-/* Vocabulary */
 .vocab-section { background: white; border-radius: 20px; padding: 18px; box-shadow: 0 4px 16px rgba(0,0,0,0.08); margin-bottom: 14px; }
 .vocab-section h3 { font-size: 16px; font-weight: 800; margin-bottom: 12px; }
 .vocab-item { border-bottom: 1px solid #E0F7FA; padding: 10px 0; display: flex; align-items: flex-start; gap: 10px; }
@@ -295,6 +229,59 @@ body { font-family: 'Nunito', sans-serif; background: var(--bg); color: var(--te
 .vocab-sent { font-size: 12px; color: #90A4AE; font-style: italic; margin-top: 2px; }
 .vocab-import-btn { width: 100%; background: linear-gradient(135deg, #26C6DA, #00838F); color: white; border: none; border-radius: 12px; padding: 12px; font-family: 'Nunito', sans-serif; font-size: 14px; font-weight: 800; cursor: pointer; margin-top: 12px; }
 .story-back-btn { width: 100%; background: #E0F7FA; color: var(--teal-dark); border: none; border-radius: 12px; padding: 12px; font-family: 'Nunito', sans-serif; font-size: 14px; font-weight: 800; cursor: pointer; margin-bottom: 30px; }
+
+/* ========== HIRAGANA 50音 ========== */
+.hira-header-card { background: linear-gradient(135deg, var(--pink), var(--pink-dark)); border-radius: 20px; padding: 20px; color: white; margin-bottom: 16px; box-shadow: 0 6px 20px rgba(233,30,99,0.3); }
+.hira-header-card h2 { font-family: 'Baloo 2', cursive; font-size: 22px; font-weight: 800; margin-bottom: 4px; }
+.hira-header-card p { font-size: 13px; opacity: 0.9; margin-bottom: 12px; }
+.hira-mode-btns { display: flex; gap: 8px; }
+.hira-mode-btn { flex: 1; background: rgba(255,255,255,0.2); color: white; border: 2px solid rgba(255,255,255,0.4); border-radius: 12px; padding: 9px; font-family: 'Nunito', sans-serif; font-size: 13px; font-weight: 800; cursor: pointer; transition: all 0.15s; }
+.hira-mode-btn.active { background: white; color: var(--pink-dark); border-color: white; }
+
+.hira-practice-card { background: white; border-radius: 20px; padding: 20px; box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+.hira-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.hira-nav-btn { background: #FCE4EC; color: var(--pink-dark); border: none; border-radius: 12px; width: 44px; height: 44px; font-size: 22px; cursor: pointer; font-weight: 800; transition: all 0.15s; }
+.hira-nav-btn:active { transform: scale(0.92); }
+.hira-nav-btn:disabled { opacity: 0.3; cursor: default; }
+.hira-progress { font-size: 15px; font-weight: 800; color: var(--text-soft); }
+
+.hira-char-display { text-align: center; margin-bottom: 20px; padding: 20px; background: #FCE4EC; border-radius: 20px; }
+.hira-big-char { font-size: 80px; line-height: 1; cursor: pointer; margin-bottom: 6px; font-family: 'Noto Sans JP', sans-serif; }
+.hira-romaji { font-size: 20px; font-weight: 800; color: var(--pink-dark); margin-bottom: 10px; letter-spacing: 2px; }
+
+.hira-word-card { background: #FFF0F5; border-radius: 16px; padding: 16px; margin-bottom: 16px; text-align: center; }
+.hira-word-emoji { font-size: 36px; margin-bottom: 6px; }
+.hira-word-text { font-size: 22px; font-weight: 800; color: var(--text); margin-bottom: 4px; }
+.hira-kanji { font-size: 16px; color: var(--text-soft); font-weight: 600; }
+.hira-word-zh { font-size: 14px; color: var(--text-soft); margin-bottom: 8px; }
+.hira-speak-btn { background: var(--pink); color: white; border: none; border-radius: 10px; padding: 7px 16px; font-family: 'Nunito', sans-serif; font-size: 13px; font-weight: 800; cursor: pointer; transition: all 0.15s; }
+.hira-speak-btn:active { transform: scale(0.96); }
+
+.hira-write-section { margin-bottom: 16px; }
+.hira-write-label { font-size: 13px; font-weight: 700; color: var(--text-soft); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+.hira-boxes { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.hira-box-wrap { position: relative; width: 80px; height: 80px; }
+.hira-canvas { border: 2px solid #FCE4EC; border-radius: 12px; background: white; touch-action: none; display: block; }
+.hira-ghost { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 48px; color: #F8BBD0; pointer-events: none; user-select: none; font-family: 'Noto Sans JP', sans-serif; }
+.hira-clear-btn { background: #FFEBEE; color: var(--red); border: none; border-radius: 10px; padding: 8px 16px; font-family: 'Nunito', sans-serif; font-size: 13px; font-weight: 800; cursor: pointer; }
+
+.hira-done-btn { width: 100%; background: linear-gradient(135deg, var(--pink), var(--pink-dark)); color: white; border: none; border-radius: 14px; padding: 14px; font-family: 'Nunito', sans-serif; font-size: 16px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 12px rgba(233,30,99,0.3); transition: all 0.15s; }
+.hira-done-btn:active { transform: scale(0.98); }
+
+/* 50音測驗 */
+.hira-quiz-card { background: white; border-radius: 20px; padding: 20px; box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+.hira-quiz-word { text-align: center; padding: 20px; background: #FCE4EC; border-radius: 16px; margin-bottom: 16px; }
+.hira-quiz-emoji { font-size: 40px; margin-bottom: 6px; }
+.hira-quiz-word-text { font-size: 28px; font-weight: 800; color: var(--text); margin-bottom: 4px; }
+.hira-quiz-zh { font-size: 14px; color: var(--text-soft); margin-bottom: 8px; }
+.hira-quiz-label { font-size: 14px; font-weight: 700; color: var(--text-soft); text-align: center; margin-bottom: 12px; }
+.hira-quiz-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.hira-opt-btn { border: 2px solid #FCE4EC; background: white; border-radius: 14px; padding: 16px 10px; font-family: 'Nunito', sans-serif; font-size: 24px; font-weight: 800; color: var(--text); cursor: pointer; transition: all 0.2s; text-align: center; line-height: 1.4; }
+.hira-opt-btn:active { transform: scale(0.96); }
+.hira-opt-btn.selected { border-color: var(--pink); background: #FCE4EC; color: var(--pink-dark); }
+.hira-opt-btn.correct-opt { border-color: var(--grass); background: #F1F8E9; color: var(--grass-dark); }
+.hira-opt-btn.wrong-opt { border-color: var(--red); background: #FFEBEE; color: var(--red); }
+.hira-opt-btn:disabled { cursor: default; }
 
 /* UTILS */
 .toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(20px); background: rgba(30,30,30,0.88); color: white; padding: 10px 22px; border-radius: 20px; font-size: 14px; font-weight: 700; opacity: 0; transition: all 0.3s; pointer-events: none; z-index: 999; white-space: nowrap; }
