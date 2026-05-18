@@ -286,6 +286,27 @@ body { font-family: 'Nunito', sans-serif; background: var(--bg); color: var(--te
 .hira-opt-btn.wrong-opt { border-color: var(--red); background: #FFEBEE; color: var(--red); }
 .hira-opt-btn:disabled { cursor: default; }
 
+/* FLASHCARD 複習 */
+.flashcard { background: #F8FBFF; border: 2px solid #E3F2FD; border-radius: 20px; padding: 24px 20px; cursor: pointer; min-height: 160px; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: all 0.2s; margin-bottom: 12px; }
+.flashcard:active { transform: scale(0.98); }
+.flashcard-front, .flashcard-back { text-align: center; width: 100%; }
+.flashcard-front.hidden, .flashcard-back.hidden { display: none; }
+.flashcard-word { font-size: 36px; font-weight: 900; color: var(--text); margin-bottom: 6px; }
+.flashcard-pos { font-size: 14px; color: var(--text-soft); font-weight: 600; margin-bottom: 8px; }
+.flashcard-hint { font-size: 13px; color: #B0BEC5; margin-top: 8px; }
+.flashcard-zh { font-size: 26px; font-weight: 800; color: var(--sky-dark); margin-bottom: 8px; }
+.flashcard-sentence { font-size: 13px; color: var(--text-soft); font-style: italic; line-height: 1.6; }
+.flashcard-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
+.flashcard-btn { border: none; border-radius: 14px; padding: 14px; font-family: 'Nunito', sans-serif; font-size: 15px; font-weight: 800; cursor: pointer; transition: all 0.15s; }
+.flashcard-btn:active { transform: scale(0.97); }
+.flashcard-btn.forgot { background: #FFEBEE; color: var(--red); }
+.flashcard-btn.remembered { background: #F1F8E9; color: var(--grass-dark); }
+
+/* FILL-IN-BLANK 填空 */
+.blank-display { font-size: 28px; font-weight: 800; letter-spacing: 4px; margin: 12px auto; text-align: center; display: flex; justify-content: center; align-items: center; gap: 2px; flex-wrap: wrap; }
+.fixed-char { color: var(--text); }
+.blank-char { color: var(--sky-dark); border-bottom: 3px solid var(--sky-dark); min-width: 18px; display: inline-block; text-align: center; }
+
 /* REVIEW BANNER */
 .review-banner { background: linear-gradient(135deg, #FF8A65, #FF5722); color: white; border-radius: 14px; padding: 14px 18px; margin-bottom: 14px; font-size: 14px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 12px rgba(255,87,34,0.3); transition: all 0.15s; }
 .review-banner:active { transform: scale(0.98); }
