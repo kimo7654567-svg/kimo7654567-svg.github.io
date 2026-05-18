@@ -260,11 +260,13 @@ function showToast(msg) {
 function esc(s) { return (s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
 
 // ==================== WORD LIST ====================
+let wordListSort = 'group'; // 'group' | 'newest' | 'oldest' | 'alpha'
+
 function renderWordList() {
   const q = (document.getElementById('searchInput').value || '').toLowerCase();
   const container = document.getElementById('wordListContainer');
   const isJa = state.lang === 'ja';
-  const words = isJa
+  let words = isJa
     ? state.jaWords.filter(w => !q || w.word.includes(q) || w.zh.includes(q))
     : state.words.filter(w => !q || w.en.toLowerCase().includes(q) || w.zh.includes(q));
 
@@ -272,49 +274,85 @@ function renderWordList() {
     container.innerHTML = `<div class="empty-state"><div class="emoji">📭</div><p>還沒有單字，去新增吧！</p></div>`;
     return;
   }
+
+  // 排序控制列
+  const sortBar = `<div class="sort-bar">
+    <span class="sort-label">排序：</span>
+    <button class="sort-btn ${wordListSort==='group'?'active':''}" onclick="setWordSort('group')">🎯 熟練度</button>
+    <button class="sort-btn ${wordListSort==='newest'?'active':''}" onclick="setWordSort('newest')">🆕 最新</button>
+    <button class="sort-btn ${wordListSort==='oldest'?'active':''}" onclick="setWordSort('oldest')">📅 最舊</button>
+    <button class="sort-btn ${wordListSort==='alpha'?'active':''}" onclick="setWordSort('alpha')">🔤 字母</button>
+  </div>`;
+
+  let html = sortBar;
+
+  if (wordListSort === 'group') {
+    // 按熟練度分組
+    const groups = [
+      { key: 'new',   label: '🆕 新字',    filter: w => (w.streak||0) === 0 },
+      { key: 'good',  label: '✅ 還不錯',   filter: w => (w.streak||0) >= 1 && (w.streak||0) < 5 },
+      { key: 'great', label: '🌟 熟練',     filter: w => (w.streak||0) >= 5 },
+    ];
+    groups.forEach(g => {
+      const gWords = words.filter(g.filter);
+      if (!gWords.length) return;
+      html += `<div class="word-group-label">${g.label} <span class="word-group-count">${gWords.length}</span></div>`;
+      html += gWords.map((w, i) => renderWordItem(w, i, isJa)).join('');
+    });
+  } else {
+    // 排序
+    if (wordListSort === 'newest') words = [...words].reverse();
+    else if (wordListSort === 'oldest') words = [...words];
+    else if (wordListSort === 'alpha') words = [...words].sort((a, b) => (isJa ? a.word : a.en).localeCompare(isJa ? b.word : b.en));
+    html += words.map((w, i) => renderWordItem(w, i, isJa)).join('');
+  }
+
+  container.innerHTML = html;
+}
+
+function setWordSort(sort) {
+  wordListSort = sort;
+  renderWordList();
+}
+
+function renderWordItem(w, i, isJa) {
   const icons = ['🍎','🐶','⭐','🎈','🌈','🦁','🌸','🚀','🎵','🍭','🐠','🌻'];
-  container.innerHTML = words.map((w, i) => {
-    const sc = (w.streak||0) >= 5 ? 'streak-great' : (w.streak||0) >= 2 ? 'streak-good' : 'streak-new';
-    const sl = (w.streak||0) >= 5 ? '🌟 熟練' : (w.streak||0) >= 2 ? '✅ 還不錯' : '🆕 新字';
-    if (isJa) {
-      return `<div class="word-item word-item-card">
-        <div class="word-item-top">
-          <div class="word-item-icon">${icons[i % icons.length]}</div>
-          <div class="word-info">
-            <div class="word-en">${w.word} <span style="font-size:13px;color:#90A4AE">${w.reading||''}</span> ${w.pos ? `<span style="font-size:12px;color:#90A4AE;font-weight:600">${w.pos}</span>` : ''}</div>
-            <div class="word-zh">${w.zh}</div>
-          </div>
-          <div class="word-meta">
-            <span class="word-streak ${sc}">${sl}</span>
-            <button class="speak-btn" onclick="speak('${esc(w.word)}','ja-JP')">🔊</button>
-          </div>
-          <button class="delete-btn" onclick="deleteJaWord(${state.jaWords.indexOf(w)})">🗑</button>
-        </div>
-        ${w.sentence ? `<div class="word-sentence-full">
-          ${w.sentence}
-          <button class="speak-btn" style="width:26px;height:26px;font-size:12px;flex-shrink:0" onclick="speak('${esc(w.sentence)}','ja-JP')">🔊</button>
-        </div>` : ''}
-      </div>`;
-    }
+  const sc = (w.streak||0) >= 5 ? 'streak-great' : (w.streak||0) >= 2 ? 'streak-good' : 'streak-new';
+  const sl = (w.streak||0) >= 5 ? '🌟 熟練' : (w.streak||0) >= 2 ? '✅ 還不錯' : '🆕 新字';
+  if (isJa) {
+    const idx = state.jaWords.indexOf(w);
     return `<div class="word-item word-item-card">
       <div class="word-item-top">
         <div class="word-item-icon">${icons[i % icons.length]}</div>
         <div class="word-info">
-          <div class="word-en">${w.en} ${w.pos ? `<span style="font-size:12px;color:#90A4AE;font-weight:600">${w.pos}</span>` : ''}</div>
+          <div class="word-en">${w.word} <span style="font-size:13px;color:#90A4AE">${w.reading||''}</span> ${w.pos ? `<span style="font-size:12px;color:#90A4AE;font-weight:600">${w.pos}</span>` : ''}</div>
           <div class="word-zh">${w.zh}</div>
         </div>
         <div class="word-meta">
           <span class="word-streak ${sc}">${sl}</span>
-          <button class="speak-btn" onclick="speak('${esc(w.en)}')">🔊</button>
+          <button class="speak-btn" onclick="speak('${esc(w.word)}','ja-JP')">🔊</button>
         </div>
-        <button class="delete-btn" onclick="deleteWord(${state.words.indexOf(w)})">🗑</button>
+        <button class="delete-btn" onclick="deleteJaWord(${idx})">🗑</button>
       </div>
-      ${w.sentence ? `<div class="word-sentence-full">
-        ${w.sentence}
-        <button class="speak-btn" style="width:26px;height:26px;font-size:12px;flex-shrink:0" onclick="speak('${esc(w.sentence)}')">🔊</button>
-      </div>` : ''}
+      ${w.sentence ? `<div class="word-sentence-full">${w.sentence}<button class="speak-btn" style="width:26px;height:26px;font-size:12px;flex-shrink:0" onclick="speak('${esc(w.sentence)}','ja-JP')">🔊</button></div>` : ''}
     </div>`;
-  }).join('');
+  }
+  const idx = state.words.indexOf(w);
+  return `<div class="word-item word-item-card">
+    <div class="word-item-top">
+      <div class="word-item-icon">${icons[i % icons.length]}</div>
+      <div class="word-info">
+        <div class="word-en">${w.en} ${w.pos ? `<span style="font-size:12px;color:#90A4AE;font-weight:600">${w.pos}</span>` : ''}</div>
+        <div class="word-zh">${w.zh}</div>
+      </div>
+      <div class="word-meta">
+        <span class="word-streak ${sc}">${sl}</span>
+        <button class="speak-btn" onclick="speak('${esc(w.en)}')">🔊</button>
+      </div>
+      <button class="delete-btn" onclick="deleteWord(${idx})">🗑</button>
+    </div>
+    ${w.sentence ? `<div class="word-sentence-full">${w.sentence}<button class="speak-btn" style="width:26px;height:26px;font-size:12px;flex-shrink:0" onclick="speak('${esc(w.sentence)}')">🔊</button></div>` : ''}
+  </div>`;
 }
 
 function renderWrong() {
