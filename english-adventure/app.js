@@ -755,57 +755,17 @@ function getSpacedWords() {
   return [...due, ...notDue].slice(0, 10);
 }
 
-async function buildClozeQuestion(word) {
-  const sentence = state.lang === 'ja' ? word.sentence : word.sentence;
-  if (!sentence) return null;
-  const type = state.lang === 'ja' ? 'ja_cloze' : 'cloze';
-  try {
-    const r = await callScript({ type, sentence });
-    return { type: 'cloze', word, clozeData: r };
-  } catch(e) {
-    const key = state.lang === 'ja' ? word.word : word.en;
-    return {
-      type: 'cloze', word,
-      clozeData: {
-        sentence, blank_word: key,
-        display_sentence: sentence.replace(new RegExp(key, 'gi'), '___'),
-        options: [key, 'は', 'が', 'を'].sort(() => Math.random() - 0.5),
-        answer: key
-      }
-    };
-  }
-}
-
-async function startQuiz(type) {
+function startQuiz(type) {
   const words = getSpacedWords();
   if (!words.length) { showToast('⚠️ 請先新增單字！'); return; }
   quiz.type = type; quiz.questions = []; quiz.idx = 0; quiz.correct = 0;
   document.getElementById('quizMenu').style.display = 'none';
   document.getElementById('quizPlay').classList.add('active');
-  document.getElementById('questionCard').innerHTML = `<div style="padding:30px 0;text-align:center;color:var(--text-soft)"><span class="loading-dots" style="color:var(--sky-dark)"><span></span><span></span><span></span></span><br><br>準備題目中...</div>`;
-  document.getElementById('checkBtn').style.display = 'none';
-  document.getElementById('nextBtn').style.display = 'none';
   document.getElementById('feedbackBox').style.display = 'none';
 
-  const wordsWithSentence = words.filter(w => w.sentence);
-  const qs = [];
-  const total = Math.min(10, words.length);
-  for (let i = 0; i < total; i++) {
-    let t = type;
-    if (type === 'mixed') {
-      const pool = ['spelling'];
-      if (wordsWithSentence.length) pool.push('cloze');
-      t = pool[i % pool.length];
-    }
-    if (t === 'spelling' || t === 'sentence') {
-      qs.push({ type: 'spelling', word: words[i % words.length] });
-    } else if (t === 'cloze') {
-      const w = wordsWithSentence[i % Math.max(wordsWithSentence.length,1)] || words[0];
-      const q = await buildClozeQuestion(w);
-      qs.push(q || { type: 'spelling', word: words[i % words.length] });
-    }
-  }
-  quiz.questions = qs;
+  // 只有 spelling 題型，mixed 就是隨機打亂順序
+  const pool = [...words].sort(() => Math.random() - 0.5).slice(0, 10);
+  quiz.questions = pool.map(w => ({ type: 'spelling', word: w }));
   renderQuestion();
 }
 
@@ -830,41 +790,24 @@ function renderQuestion() {
   let html = '';
   if (q.type === 'spelling') {
     const wordKey = getWordKey(q.word);
-    const { display, answer } = makeBlank(wordKey);
-    q._blankAnswer = answer;
+    const { display } = makeBlank(wordKey);
     const displayHtml = display.split('').map(c =>
       c === '_' ? `<span class="blank-char">_</span>` : `<span class="fixed-char">${c}</span>`
     ).join('');
     html = `<div class="question-type-label">填空測驗</div>
       <button class="speak-big-btn" id="speakBtn" onclick="speakQuestion()">🔊</button>
-      <div class="question-hint">聽發音，填入空格中缺少的字母</div>
+      <div class="question-hint">聽發音，寫出完整單字（提示如下）</div>
       <div class="question-zh">${q.word.zh}</div>
       <div class="blank-display">${displayHtml}</div>
-      <input class="answer-input" id="answerInput" type="text" placeholder="填入缺少的字母..."
+      <input class="answer-input" id="answerInput" type="text" placeholder="輸入完整單字..."
         autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false"
-        style="max-width:200px;margin:0 auto 12px;display:block">`;
-  } else if (q.type === 'sentence') {
-    html = `<div class="question-type-label">${isJa?'聽寫例句':'英聽寫句子'}</div>
-      <button class="speak-big-btn" id="speakBtn" onclick="speakQuestion()">🔊</button>
-      <div class="question-hint">${isJa?'聽發音，寫出日文例句':'聽聲音，把英文句子寫出來'}</div>
-      <div class="question-zh">${q.word.zh} 的例句</div>
-      <input class="answer-input" id="answerInput" type="text" placeholder="${isJa?'輸入例句...':'輸入英文句子...'}" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">`;
-  } else if (q.type === 'cloze') {
-    const cd = q.clozeData;
-    html = `<div class="question-type-label">克漏字測驗</div>
-      <div class="question-hint">選出正確的單字填入空格</div>
-      <div class="cloze-sentence">${cd.display_sentence.replace('___','<span style="display:inline-block;background:#E3F2FD;border-radius:8px;padding:2px 16px;min-width:80px;border-bottom:2px solid var(--sky-dark);color:var(--sky-dark)">___</span>')}</div>
-      <div class="cloze-options">${cd.options.map(opt=>`<button class="cloze-opt-btn" onclick="selectClozeOption(this,'${esc(opt)}')">${opt}</button>`).join('')}</div>`;
+        style="max-width:240px;margin:0 auto 12px;display:block">`;
   }
   document.getElementById('questionCard').innerHTML = html;
   setTimeout(() => speakQuestion(), 400);
 }
 
-function selectClozeOption(btn, val) {
-  document.querySelectorAll('.cloze-opt-btn').forEach(b => b.classList.remove('selected'));
-  btn.classList.add('selected');
-  quiz.clozeSelected = val;
-}
+function selectClozeOption() {} // 保留空函式避免舊參考報錯
 
 function speakQuestion() {
   const q = quiz.questions[quiz.idx];
@@ -891,11 +834,10 @@ function checkAnswer() {
     const input = document.getElementById('answerInput');
     val = input ? input.value.trim() : '';
     if (!val) { showToast('請填入答案！'); return; }
-    // spelling 題用填空答案，sentence 題用完整句子
-    correct = q.type === 'spelling' ? (q._blankAnswer || getWordKey(q.word)) : q.word.sentence;
+    correct = getWordKey(q.word); // 永遠比對完整單字
   }
 
-  const isCorrect = val.toLowerCase() === correct.toLowerCase();
+  const isCorrect = val.toLowerCase().trim() === correct.toLowerCase().trim();
   const fb = document.getElementById('feedbackBox');
   fb.style.display = 'block';
 
@@ -1030,20 +972,27 @@ function renderFlashcard() {
       <div class="flashcard-front ${flipped ? 'hidden' : ''}">
         <div class="flashcard-word">${wordKey}</div>
         ${w.pos ? `<div class="flashcard-pos">${isJa ? (w.reading || '') : w.pos}</div>` : ''}
-        <button class="speak-btn" style="margin:10px auto;display:flex" onclick="event.stopPropagation();speak('${esc(wordKey)}','${speakLang}')">🔊</button>
+        <div style="margin:20px 0 16px">
+          <button class="speak-btn" style="margin:0 auto;display:flex" onclick="event.stopPropagation();speak('${esc(wordKey)}','${speakLang}')">🔊</button>
+        </div>
         <div class="flashcard-hint">點卡片查看中文</div>
       </div>
       <div class="flashcard-back ${flipped ? '' : 'hidden'}">
         <div class="flashcard-zh">${w.zh}</div>
         ${w.sentence ? `<div class="flashcard-sentence">${w.sentence}</div>` : ''}
-        <button class="speak-btn" style="margin:8px auto;display:flex" onclick="event.stopPropagation();speak('${esc(wordKey)}','${speakLang}')">🔊</button>
+        <div style="margin:20px 0 8px">
+          <button class="speak-btn" style="margin:0 auto;display:flex" onclick="event.stopPropagation();speak('${esc(wordKey)}','${speakLang}')">🔊</button>
+        </div>
       </div>
     </div>
-    ${flipped ? `
-    <div class="flashcard-btns">
-      <button class="flashcard-btn forgot" onclick="reviewAnswer(false)">😅 忘了</button>
-      <button class="flashcard-btn remembered" onclick="reviewAnswer(true)">😊 記得</button>
-    </div>` : ''}`;
+    <div class="flashcard-btns ${flipped ? '' : 'pre-flip'}">
+      ${flipped ? `
+        <button class="flashcard-btn forgot" onclick="reviewAnswer(false)">😅 忘了</button>
+        <button class="flashcard-btn remembered" onclick="reviewAnswer(true)">😊 記得</button>
+      ` : `
+        <button class="flashcard-btn skip" onclick="reviewAnswer(true)">⏭ 跳過（記得）</button>
+      `}
+    </div>`;
 }
 
 function flipCard() {
@@ -1165,12 +1114,19 @@ async function generateStory() {
   btn.innerHTML = `<span class="loading-dots" style="color:white"><span></span><span></span><span></span></span> AI 生成故事中...`;
   const isJa = state.lang === 'ja';
   try {
-    const learnedWords = isJa ? state.jaWords.map(w => w.word) : state.words.map(w => w.en);
+    // 優化單字傳遞：最多20個，低熟練度優先
+    const allWords = state.lang === 'ja' ? state.jaWords : state.words;
+    const mustReview = allWords.filter(w => (w.streak||0) <= 1).slice(0, 10);
+    const shouldReview = allWords.filter(w => (w.streak||0) >= 2 && (w.streak||0) <= 3).slice(0, 10);
+    const optimizedWords = [...mustReview, ...shouldReview].slice(0, 20);
+    const learnedWords = isJa ? optimizedWords.map(w => w.word) : optimizedWords.map(w => w.en);
+    const mustWords = isJa ? mustReview.map(w => w.word) : mustReview.map(w => w.en);
     const data = await callScript({
       type: isJa ? 'ja_story' : 'story',
       level: storyState.level,
       genre: storyState.genre,
-      learned_words: learnedWords
+      learned_words: learnedWords,
+      must_words: mustWords
     });
     storyState.sentences = data.sentences || [];
     storyState.stepIdx = 0;
