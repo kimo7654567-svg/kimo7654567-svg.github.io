@@ -34,7 +34,7 @@ body { font-family: 'Nunito', sans-serif; background: var(--bg); color: var(--te
 .lang-flag:active { transform: scale(0.95); }
 
 /* NAV */
-.nav { display: flex; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow-x: auto; scrollbar-width: none; }
+.nav { display: flex; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow-x: auto; scrollbar-width: none; position: sticky; top: 54px; z-index: 99; }
 .nav::-webkit-scrollbar { display: none; }
 .nav-btn { flex: 1; min-width: 65px; padding: 10px 4px 8px; border: none; background: none; display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; color: #9E9E9E; font-family: 'Nunito', sans-serif; font-size: 10px; font-weight: 700; transition: all 0.2s; position: relative; }
 .nav-btn .icon { font-size: 20px; }
@@ -68,6 +68,15 @@ body { font-family: 'Nunito', sans-serif; background: var(--bg); color: var(--te
 .action-btn.story { background: linear-gradient(135deg, #26C6DA, #00838F); color: white; box-shadow: 0 4px 12px rgba(0,131,143,0.3); }
 .action-btn.add { background: linear-gradient(135deg, #66BB6A, #388E3C); color: white; box-shadow: 0 4px 12px rgba(56,142,60,0.3); }
 .action-btn.review { background: linear-gradient(135deg, #FFD54F, #FF8F00); color: #5D4037; box-shadow: 0 4px 12px rgba(255,143,0,0.3); }
+
+/* SORT BAR */
+.sort-bar { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+.sort-label { font-size: 12px; font-weight: 700; color: var(--text-soft); }
+.sort-btn { border: 2px solid #E3F2FD; background: white; border-radius: 10px; padding: 5px 10px; font-family: 'Nunito', sans-serif; font-size: 12px; font-weight: 700; color: var(--text-soft); cursor: pointer; transition: all 0.15s; }
+.sort-btn.active { border-color: var(--sky-dark); background: #E3F2FD; color: var(--sky-dark); }
+.sort-btn:active { transform: scale(0.96); }
+.word-group-label { font-size: 13px; font-weight: 800; color: var(--text-soft); padding: 8px 4px 4px; display: flex; align-items: center; gap: 6px; }
+.word-group-count { background: #E3F2FD; color: var(--sky-dark); border-radius: 10px; padding: 2px 8px; font-size: 11px; }
 
 /* WORD LIST */
 .search-bar { background: white; border-radius: 14px; padding: 10px 14px; display: flex; align-items: center; gap: 10px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
