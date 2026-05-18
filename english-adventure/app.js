@@ -791,13 +791,20 @@ function renderQuestion() {
   const speakLang = isJa ? 'ja-JP' : 'en-US';
   let html = '';
   if (q.type === 'spelling') {
-    const label = isJa ? '聽發音，寫出日文單字（平假名）' : '聽聲音，把英文單字拼出來';
-    const hint = isJa ? q.word.zh : q.word.zh;
-    html = `<div class="question-type-label">${isJa?'聽寫單字':'英聽拼寫單字'}</div>
+    const wordKey = getWordKey(q.word);
+    const { display, answer } = makeBlank(wordKey);
+    q._blankAnswer = answer;
+    const displayHtml = display.split('').map(c =>
+      c === '_' ? `<span class="blank-char">_</span>` : `<span class="fixed-char">${c}</span>`
+    ).join('');
+    html = `<div class="question-type-label">填空測驗</div>
       <button class="speak-big-btn" id="speakBtn" onclick="speakQuestion()">🔊</button>
-      <div class="question-hint">${label}</div>
-      <div class="question-zh">${hint}</div>
-      <input class="answer-input" id="answerInput" type="text" placeholder="${isJa?'輸入平假名...':'輸入英文單字...'}" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">`;
+      <div class="question-hint">聽發音，填入空格中缺少的字母</div>
+      <div class="question-zh">${q.word.zh}</div>
+      <div class="blank-display">${displayHtml}</div>
+      <input class="answer-input" id="answerInput" type="text" placeholder="填入缺少的字母..."
+        autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false"
+        style="max-width:200px;margin:0 auto 12px;display:block">`;
   } else if (q.type === 'sentence') {
     html = `<div class="question-type-label">${isJa?'聽寫例句':'英聽寫句子'}</div>
       <button class="speak-big-btn" id="speakBtn" onclick="speakQuestion()">🔊</button>
@@ -846,7 +853,8 @@ function checkAnswer() {
     const input = document.getElementById('answerInput');
     val = input ? input.value.trim() : '';
     if (!val) { showToast('請填入答案！'); return; }
-    correct = q.type === 'spelling' ? getWordKey(q.word) : q.word.sentence;
+    // spelling 題用填空答案，sentence 題用完整句子
+    correct = q.type === 'spelling' ? (q._blankAnswer || getWordKey(q.word)) : q.word.sentence;
   }
 
   const isCorrect = val.toLowerCase() === correct.toLowerCase();
@@ -880,7 +888,7 @@ function checkAnswer() {
     fb.className = 'feedback-box wrong';
     document.getElementById('feedbackEmoji').textContent = '💪';
     document.getElementById('feedbackText').textContent = '沒關係，再加油！';
-    document.getElementById('feedbackAnswer').textContent = `正確答案：${correct}`;
+    document.getElementById('feedbackAnswer').textContent = `正確答案：${q.type === 'spelling' ? getWordKey(q.word) : correct}`;
     if (q.type === 'spelling') {
       q.word.streak = 0; q.word.nextReview = Date.now() + 600000;
       const lang = state.lang === 'ja' ? 'ja' : 'en';
@@ -916,29 +924,119 @@ function resetQuiz() {
   document.getElementById('quizResult').classList.remove('active');
 }
 
-async function startReviewQuiz() {
+// ==================== 填空輔助函式 ====================
+function makeBlank(word) {
+  const len = word.length;
+  let blankCount;
+  if (len <= 3) blankCount = 1;
+  else if (len <= 6) blankCount = 2;
+  else blankCount = 3;
+
+  // 永遠保留第一個和最後一個，遮中間部分
+  const start = 1;
+  const end = len - 1;
+  const available = end - start; // 可遮的位置數
+
+  // 從中間開始往外遮
+  const mid = Math.floor((start + end) / 2);
+  const positions = new Set();
+  positions.add(mid);
+  let left = mid - 1, right = mid + 1;
+  while (positions.size < Math.min(blankCount, available)) {
+    if (left >= start) { positions.add(left--); }
+    if (positions.size < Math.min(blankCount, available) && right < end) { positions.add(right++); }
+    if (left < start && right >= end) break;
+  }
+
+  const display = word.split('').map((c, i) => positions.has(i) ? '_' : c).join('');
+  const answer = word.split('').filter((c, i) => positions.has(i)).join('');
+  return { display, answer, positions: [...positions].sort() };
+}
+
+// ==================== 複習閃卡模式 ====================
+let reviewState = { words: [], idx: 0, flipped: false };
+
+function startReviewQuiz() {
   const due = getDueWords();
   if (!due.length) { showToast('今天沒有需要複習的單字！'); return; }
   showScreen('quiz');
-  quiz.type = 'review'; quiz.questions = []; quiz.idx = 0; quiz.correct = 0;
+  reviewState = { words: due, idx: 0, flipped: false };
   document.getElementById('quizMenu').style.display = 'none';
-  document.getElementById('quizPlay').classList.add('active');
-  document.getElementById('questionCard').innerHTML = `<div style="padding:30px 0;text-align:center;color:var(--text-soft)"><span class="loading-dots" style="color:var(--sky-dark)"><span></span><span></span><span></span></span><br><br>準備複習題目中...</div>`;
+  document.getElementById('quizPlay').classList.remove('active');
+  document.getElementById('quizResult').classList.remove('active');
+  renderFlashcard();
+}
+
+function renderFlashcard() {
+  // 用 quizPlay 區域顯示閃卡
+  const play = document.getElementById('quizPlay');
+  play.classList.add('active');
   document.getElementById('checkBtn').style.display = 'none';
   document.getElementById('nextBtn').style.display = 'none';
   document.getElementById('feedbackBox').style.display = 'none';
 
-  const qs = due.map(w => ({ type: 'spelling', word: w }));
-  // 有句子的加入克漏字
-  const withSentence = due.filter(w => w.sentence);
-  if (withSentence.length) {
-    for (const w of withSentence.slice(0, 3)) {
-      const q = await buildClozeQuestion(w);
-      if (q) qs.push(q);
-    }
+  const { words, idx, flipped } = reviewState;
+  const w = words[idx];
+  const total = words.length;
+  const isJa = state.lang === 'ja';
+  const wordKey = isJa ? w.word : w.en;
+  const speakLang = isJa ? 'ja-JP' : 'en-US';
+
+  document.getElementById('quizProgressText').textContent = `複習 ${idx + 1} / ${total}`;
+  document.getElementById('quizScoreText').textContent = '';
+  document.getElementById('quizProgressBar').style.width = Math.round((idx / total) * 100) + '%';
+
+  document.getElementById('questionCard').innerHTML = `
+    <div class="question-type-label">📇 單字複習</div>
+    <div class="flashcard" onclick="flipCard()">
+      <div class="flashcard-front ${flipped ? 'hidden' : ''}">
+        <div class="flashcard-word">${wordKey}</div>
+        ${w.pos ? `<div class="flashcard-pos">${isJa ? (w.reading || '') : w.pos}</div>` : ''}
+        <button class="speak-btn" style="margin:10px auto;display:flex" onclick="event.stopPropagation();speak('${esc(wordKey)}','${speakLang}')">🔊</button>
+        <div class="flashcard-hint">點卡片查看中文</div>
+      </div>
+      <div class="flashcard-back ${flipped ? '' : 'hidden'}">
+        <div class="flashcard-zh">${w.zh}</div>
+        ${w.sentence ? `<div class="flashcard-sentence">${w.sentence}</div>` : ''}
+        <button class="speak-btn" style="margin:8px auto;display:flex" onclick="event.stopPropagation();speak('${esc(wordKey)}','${speakLang}')">🔊</button>
+      </div>
+    </div>
+    ${flipped ? `
+    <div class="flashcard-btns">
+      <button class="flashcard-btn forgot" onclick="reviewAnswer(false)">😅 忘了</button>
+      <button class="flashcard-btn remembered" onclick="reviewAnswer(true)">😊 記得</button>
+    </div>` : ''}`;
+}
+
+function flipCard() {
+  reviewState.flipped = true;
+  renderFlashcard();
+}
+
+function reviewAnswer(remembered) {
+  const w = reviewState.words[reviewState.idx];
+  if (remembered) {
+    w.streak = (w.streak || 0) + 1;
+    w.nextReview = Date.now() + Math.pow(2, w.streak) * 86400000;
+  } else {
+    w.streak = 0;
+    w.nextReview = Date.now() + 86400000; // 明天再複習
   }
-  quiz.questions = qs.sort(() => Math.random() - 0.5);
-  renderQuestion();
+  save();
+  reviewState.idx++;
+  reviewState.flipped = false;
+  if (reviewState.idx >= reviewState.words.length) {
+    // 複習完成
+    document.getElementById('quizPlay').classList.remove('active');
+    const result = document.getElementById('quizResult');
+    result.classList.add('active');
+    document.getElementById('resultEmoji').textContent = '📇';
+    document.getElementById('resultScore').textContent = `${reviewState.words.length} 個`;
+    document.getElementById('resultXP').textContent = `複習完成！+${reviewState.words.length * 5} XP`;
+    addXP(reviewState.words.length * 5);
+  } else {
+    renderFlashcard();
+  }
 }
 
 // ==================== STORY ====================
