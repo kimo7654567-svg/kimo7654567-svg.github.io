@@ -306,10 +306,12 @@ body { font-family: 'Nunito', sans-serif; background: var(--bg); color: var(--te
 .flashcard-zh { font-size: 26px; font-weight: 800; color: var(--sky-dark); margin-bottom: 8px; }
 .flashcard-sentence { font-size: 13px; color: var(--text-soft); font-style: italic; line-height: 1.6; }
 .flashcard-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
+.flashcard-btns.pre-flip { grid-template-columns: 1fr; }
 .flashcard-btn { border: none; border-radius: 14px; padding: 14px; font-family: 'Nunito', sans-serif; font-size: 15px; font-weight: 800; cursor: pointer; transition: all 0.15s; }
 .flashcard-btn:active { transform: scale(0.97); }
 .flashcard-btn.forgot { background: #FFEBEE; color: var(--red); }
 .flashcard-btn.remembered { background: #F1F8E9; color: var(--grass-dark); }
+.flashcard-btn.skip { background: #E3F2FD; color: var(--sky-dark); }
 
 /* FILL-IN-BLANK 填空 */
 .blank-display { font-size: 28px; font-weight: 800; letter-spacing: 4px; margin: 12px auto; text-align: center; display: flex; justify-content: center; align-items: center; gap: 2px; flex-wrap: wrap; }
