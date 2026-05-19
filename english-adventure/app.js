@@ -698,6 +698,22 @@ function speakWebSpeech(text, langCode, rate) {
   });
 }
 
+async function testTTS() {
+  showToast('⏳ 測試中...', 10000);
+  try {
+    const result = await callScript({ type: 'tts', text: 'Hello, this is a test.', lang: 'en' });
+    if (result.audioData) {
+      const audio = new Audio(`data:${result.mimeType || 'audio/wav'};base64,${result.audioData}`);
+      audio.play();
+      showToast('✅ Gemini TTS 正常！', 3000);
+    } else {
+      showToast('❌ 沒有音訊資料：' + JSON.stringify(result).slice(0, 80), 5000);
+    }
+  } catch(e) {
+    showToast('❌ TTS 錯誤：' + e.message.slice(0, 100), 6000);
+  }
+}
+
 function stopGeminiTTS() {
   if (_ttsAudio) { _ttsAudio.pause(); _ttsAudio.currentTime = 0; _ttsAudio = null; }
   window.speechSynthesis && window.speechSynthesis.cancel();
