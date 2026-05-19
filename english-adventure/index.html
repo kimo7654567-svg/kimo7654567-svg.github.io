@@ -14,6 +14,12 @@
 </head>
 <body>
 
+<!-- 用戶選擇頁（全螢幕覆蓋） -->
+<div id="userSelectScreen" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:9999;align-items:center;justify-content:center;padding:20px"></div>
+
+<!-- App 主體 -->
+<div id="appWrapper" style="display:none">
+
 <div class="header">
   <div>
     <div class="header-title">⭐ 語言<span>冒險</span></div>
@@ -219,32 +225,9 @@
 <div class="toast" id="toast"></div>
 <canvas class="confetti-overlay" id="confettiCanvas"></canvas>
 
+</div><!-- end appWrapper -->
+
 <script src="api.js"></script>
 <script src="app.js"></script>
-<script>
-// 根據語言顯示/隱藏新增單字區塊
-function updateAddSection() {
-  const isJa = state.lang === 'ja';
-  document.getElementById('addEnSection').style.display = isJa ? 'none' : 'block';
-  document.getElementById('addJaSection').style.display = isJa ? 'block' : 'none';
-  // 日文模式隱藏 L4/L5
-  const levelGrid = document.getElementById('levelGrid');
-  if (levelGrid) {
-    levelGrid.querySelectorAll('[data-level="L4"],[data-level="L5"]').forEach(btn => {
-      btn.style.display = isJa ? 'none' : '';
-    });
-  }
-}
-// 每次切換語言後呼叫
-const _origSwitchLang = switchLang;
-window.switchLang = function(lang) {
-  _origSwitchLang(lang);
-  updateAddSection();
-  renderGenreGrid(storyState.level);
-};
-// 初始化
-updateAddSection();
-renderGenreGrid(storyState.level);
-</script>
 </body>
 </html>
