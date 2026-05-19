@@ -1676,11 +1676,21 @@ function confetti() {
 }
 
 // ==================== BOOT ====================
-const lastUser = getLastUser();
-if (lastUser && getAllUsers().find(u => u.name === lastUser)) {
-  // 有上次登入的用戶，直接登入
-  loginUser(lastUser);
-} else {
-  // 沒有用戶或找不到，顯示用戶選擇頁
-  showUserSelect();
+try {
+  const lastUser = getLastUser();
+  if (lastUser && getAllUsers().find(u => u.name === lastUser)) {
+    loginUser(lastUser);
+  } else {
+    showUserSelect();
+  }
+} catch(e) {
+  console.error('BOOT 錯誤：', e);
+  // 強制顯示用戶選擇頁，避免空白
+  try {
+    document.getElementById('userSelectScreen').style.display = 'flex';
+    document.getElementById('appWrapper').style.display = 'none';
+    renderUserSelect();
+  } catch(e2) {
+    document.body.innerHTML = '<div style="padding:40px;text-align:center;font-family:sans-serif"><h2>載入錯誤</h2><p>' + e.message + '</p><button onclick="localStorage.clear();location.reload()">清除資料並重新載入</button></div>';
+  }
 }
