@@ -313,12 +313,14 @@ function getDueWords() {
 
 function esc(s) { return (s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
 
-function showToast(msg) {
+function showToast(msg, duration) {
+  duration = duration || 2500;
   const t = document.getElementById('toast');
   if (!t) return;
   t.textContent = msg;
   t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2500);
+  clearTimeout(t._timeout);
+  t._timeout = setTimeout(() => t.classList.remove('show'), duration);
 }
 
 function updateAddSection() {
@@ -655,26 +657,50 @@ function speak(text, lang, rate) {
 }
 
 let _ttsAudio = null;
+
 async function speakGemini(text, lang) {
   lang = lang || 'en';
+  const langCode = lang === 'ja' ? 'ja-JP' : 'en-US';
+  const rate = LEVEL_RATES[storyState.level] || 0.85;
+
   try {
     if (_ttsAudio) { _ttsAudio.pause(); _ttsAudio = null; }
     const result = await callScript({ type: 'tts', text: stripEmoji(text), lang });
-    const audio = new Audio(`data:${result.mimeType};base64,${result.audioData}`);
+    if (!result.audioData) throw new Error('沒有音訊資料');
+    const audio = new Audio(`data:${result.mimeType || 'audio/wav'};base64,${result.audioData}`);
     _ttsAudio = audio;
     return new Promise((resolve) => {
       audio.onended = resolve;
-      audio.onerror = resolve;
-      audio.play();
+      audio.onerror = () => {
+        // 音訊播放失敗，fallback
+        speakWebSpeech(text, langCode, rate).then(resolve);
+      };
+      audio.play().catch(() => {
+        speakWebSpeech(text, langCode, rate).then(resolve);
+      });
     });
   } catch(e) {
-    const langCode = lang === 'ja' ? 'ja-JP' : 'en-US';
-    speak(text, langCode, LEVEL_RATES[storyState.level] || 0.85);
+    // API 失敗，fallback 到 Web Speech
+    return speakWebSpeech(text, langCode, rate);
   }
+}
+
+function speakWebSpeech(text, langCode, rate) {
+  return new Promise((resolve) => {
+    if (!window.speechSynthesis) { resolve(); return; }
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(stripEmoji(text));
+    u.lang = langCode || 'en-US';
+    u.rate = rate || 0.85;
+    u.onend = resolve;
+    u.onerror = resolve;
+    window.speechSynthesis.speak(u);
+  });
 }
 
 function stopGeminiTTS() {
   if (_ttsAudio) { _ttsAudio.pause(); _ttsAudio.currentTime = 0; _ttsAudio = null; }
+  window.speechSynthesis && window.speechSynthesis.cancel();
 }
 
 // ==================== FILL-IN-BLANK ====================
@@ -1141,7 +1167,10 @@ function speakSentence(idx) {
   if (!el) return;
   el.classList.add('speaking');
   const lang = state.lang === 'ja' ? 'ja' : 'en';
-  speakGemini(storyState.sentences[idx], lang).then(() => { el.classList.remove('speaking'); });
+  showToast('⏳ 載入語音...', 8000);
+  speakGemini(storyState.sentences[idx], lang).then(() => {
+    el.classList.remove('speaking');
+  });
 }
 
 function readStoryAll() {
@@ -1152,6 +1181,7 @@ function readStoryAll() {
   let idx = 0;
   let cancelled = false;
   window._storyReadCancelled = function() { cancelled = true; };
+  showToast('⏳ 載入語音...', 8000);
   async function speakNext() {
     if (cancelled || idx >= sentences.length) { clearHighlight(); return; }
     clearHighlight();
@@ -1172,7 +1202,10 @@ function readStoryStep() {
   const el = document.getElementById('story-sent-' + idx);
   if (el) { el.classList.add('speaking'); el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
   const lang = state.lang === 'ja' ? 'ja' : 'en';
-  speakGemini(storyState.sentences[idx], lang).then(() => { if (el) el.classList.remove('speaking'); });
+  if (idx === 0) showToast('⏳ 載入語音...');
+  speakGemini(storyState.sentences[idx], lang).then(() => {
+    if (el) el.classList.remove('speaking');
+  });
   storyState.stepIdx++;
 }
 
