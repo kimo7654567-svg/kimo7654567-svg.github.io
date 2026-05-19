@@ -173,6 +173,8 @@ function loginUser(name) {
   load(name);
   setLastUser(name);
   renderNav();
+  updateAddSection();
+  renderGenreGrid(storyState.level);
   updateHome();
   showScreen('home');
   document.getElementById('userSelectScreen').style.display = 'none';
@@ -347,16 +349,29 @@ function handleImportFile(e) {
 }
 
 // ==================== LANGUAGE SWITCH ====================
+function updateAddSection() {
+  const isJa = state.lang === 'ja';
+  const enSec = document.getElementById('addEnSection');
+  const jaSec = document.getElementById('addJaSection');
+  if (enSec) enSec.style.display = isJa ? 'none' : 'block';
+  if (jaSec) jaSec.style.display = isJa ? 'block' : 'none';
+  const levelGrid = document.getElementById('levelGrid');
+  if (levelGrid) {
+    levelGrid.querySelectorAll('[data-level="L4"],[data-level="L5"]').forEach(btn => {
+      btn.style.display = isJa ? 'none' : '';
+    });
+  }
+}
+
 function switchLang(lang) {
   state.lang = lang;
   save();
-  // 更新國旗按鈕
   document.querySelectorAll('.lang-flag').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.lang === lang);
   });
-  // 更新導覽列
   renderNav();
-  // 回到首頁
+  updateAddSection();
+  renderGenreGrid(storyState.level);
   showScreen('home');
 }
 
