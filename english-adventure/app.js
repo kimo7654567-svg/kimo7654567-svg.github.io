@@ -1,6 +1,29 @@
 // ==================== STATE ====================
+// 間隔重複階段設定
+const SRS_STAGES = [
+  { stage: 0, label: '🆕 新字',   days: 3,    next: 1 },
+  { stage: 1, label: '📖 學習中', days: 7,    next: 2 },
+  { stage: 2, label: '✅ 已掌握', days: 30,   next: 3 },
+  { stage: 3, label: '🌟 熟練',   days: null, next: 3 }, // 不再排程
+];
+
+function getSrsLabel(stage) { return (SRS_STAGES[stage] || SRS_STAGES[0]).label; }
+function getSrsClass(stage) {
+  if (stage >= 3) return 'streak-great';
+  if (stage >= 1) return 'streak-good';
+  return 'streak-new';
+}
+function calcNextReview(stage, correct) {
+  if (!correct) return { stage: 0, nextReview: Date.now() + 3 * 86400000 };
+  const next = Math.min(stage + 1, 3);
+  const days = SRS_STAGES[next]?.days;
+  const nextReview = days ? Date.now() + days * 86400000 : Date.now() + 9999 * 86400000;
+  return { stage: next, nextReview };
+}
+
 let state = {
   lang: 'en',
+  currentUser: null,   // 目前登入的用戶名稱
   words: [],
   jaWords: [],
   hiragana: {},
@@ -13,6 +36,9 @@ let state = {
   settings: {
     dailyReviewCount: 5,
     scriptUrl: 'https://script.google.com/macros/s/AKfycbzHmM7yXQskkWHKXF0B-obIJrMAhuKCdKaSDZnhjZUOogYykrlJSq762CeD5YlQt560/exec',
+    secret: '5566',
+  }
+};
     secret: '5566',
   }
 };
@@ -78,28 +104,181 @@ function getLevel(xp) {
 }
 
 // ==================== STORAGE ====================
-function save() { try { localStorage.setItem('ea_state', JSON.stringify(state)); } catch(e){} }
-function load() {
+function getStorageKey() {
+  return state.currentUser ? `ea_state_${state.currentUser}` : 'ea_state';
+}
+
+function save() {
+  try { localStorage.setItem(getStorageKey(), JSON.stringify(state)); } catch(e) {}
+}
+
+function load(userName) {
   try {
-    const s = localStorage.getItem('ea_state');
+    const key = userName ? `ea_state_${userName}` : 'ea_state';
+    const s = localStorage.getItem(key);
     if (s) {
       const loaded = JSON.parse(s);
       state = { ...state, ...loaded };
+      state.currentUser = userName || loaded.currentUser || null;
       delete state.sentences;
-      // 舊版 xp 遷移到 enXp
+      // 遷移舊版 xp
       if (state.xp && !state.enXp) state.enXp = state.xp;
       state.xp = 0;
-      // 舊版 wrongWords 遷移（舊版是 {word: count}，新版是 {en:{}, ja:{}}）
+      // 遷移舊版 wrongWords
       if (state.wrongWords && !state.wrongWords.en) {
         state.wrongWords = { en: state.wrongWords, ja: {} };
       }
-      // 確保 settings 有預設值
+      // 遷移舊版 streak → stage
+      state.words.forEach(w => {
+        if (w.stage === undefined) w.stage = Math.min(w.streak || 0, 3);
+      });
+      state.jaWords.forEach(w => {
+        if (w.stage === undefined) w.stage = Math.min(w.streak || 0, 3);
+      });
       state.settings = { ...state.settings, ...loaded.settings };
+    } else if (userName) {
+      // 新用戶，重置資料
+      state = {
+        ...state,
+        lang: 'en', words: [], jaWords: [], hiragana: {},
+        enXp: 0, jaXp: 0, xp: 0,
+        totalQuizzes: 0, totalCorrect: 0,
+        wrongWords: { en: {}, ja: {} },
+        currentUser: userName,
+      };
     }
   } catch(e) {}
 }
 
-function getCurrentXp() { return state.lang === 'ja' ? state.jaXp : state.enXp; }
+// ==================== 用戶管理 ====================
+function getAllUsers() {
+  const users = JSON.parse(localStorage.getItem('ea_users') || '[]');
+  return users;
+}
+
+function saveUsers(users) {
+  localStorage.setItem('ea_users', JSON.stringify(users));
+}
+
+function getLastUser() {
+  return localStorage.getItem('ea_last_user') || null;
+}
+
+function setLastUser(name) {
+  localStorage.setItem('ea_last_user', name);
+}
+
+function loginUser(name) {
+  state.currentUser = name;
+  load(name);
+  setLastUser(name);
+  renderNav();
+  updateHome();
+  showScreen('home');
+  document.getElementById('userSelectScreen').style.display = 'none';
+  document.getElementById('appWrapper').style.display = 'block';
+}
+
+function showUserSelect() {
+  document.getElementById('userSelectScreen').style.display = 'flex';
+  document.getElementById('appWrapper').style.display = 'none';
+  renderUserSelect();
+}
+
+function renderUserSelect() {
+  const users = getAllUsers();
+  const container = document.getElementById('userSelectScreen');
+  container.innerHTML = `
+    <div class="user-select-wrap">
+      <div class="user-select-title">👋 你是誰？</div>
+      <div class="user-list">
+        ${users.map(u => `
+          <button class="user-btn" onclick="loginUser('${esc(u.name)}')">
+            <span class="user-emoji">${u.emoji}</span>
+            <span class="user-name">${u.name}</span>
+          </button>`).join('')}
+        <button class="user-btn user-add-btn" onclick="showAddUser()">
+          <span class="user-emoji">➕</span>
+          <span class="user-name">新增用戶</span>
+        </button>
+      </div>
+    </div>`;
+}
+
+function showAddUser() {
+  const container = document.getElementById('userSelectScreen');
+  const emojis = ['👦','👧','👨','👩','🧒','👴','👵','🧑','🐶','🐱','🦊','🐼'];
+  container.innerHTML = `
+    <div class="user-select-wrap">
+      <div class="user-select-title">新增用戶</div>
+      <div class="user-emoji-grid">
+        ${emojis.map(e => `<button class="emoji-pick-btn" onclick="selectUserEmoji(this,'${e}')">${e}</button>`).join('')}
+      </div>
+      <div id="selectedEmoji" style="font-size:48px;text-align:center;margin:12px 0">👦</div>
+      <input id="newUserName" type="text" placeholder="輸入名字"
+        style="width:100%;border:2px solid #E3F2FD;border-radius:12px;padding:12px;font-family:'Nunito',sans-serif;font-size:18px;text-align:center;outline:none;-webkit-user-select:auto;user-select:auto;margin-bottom:12px">
+      <button onclick="createUser()" style="width:100%;background:linear-gradient(135deg,#29B6F6,#0288D1);color:white;border:none;border-radius:14px;padding:14px;font-family:'Nunito',sans-serif;font-size:16px;font-weight:800;cursor:pointer">
+        ✅ 建立用戶
+      </button>
+      ${getAllUsers().length > 0 ? `<button onclick="renderUserSelect()" style="width:100%;background:#E3F2FD;color:var(--sky-dark);border:none;border-radius:14px;padding:12px;font-family:'Nunito',sans-serif;font-size:14px;font-weight:800;cursor:pointer;margin-top:8px">← 返回</button>` : ''}
+    </div>`;
+}
+
+let _selectedUserEmoji = '👦';
+function selectUserEmoji(btn, emoji) {
+  _selectedUserEmoji = emoji;
+  document.querySelectorAll('.emoji-pick-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  document.getElementById('selectedEmoji').textContent = emoji;
+}
+
+function createUser() {
+  const name = document.getElementById('newUserName').value.trim();
+  if (!name) { alert('請輸入名字'); return; }
+  const users = getAllUsers();
+  if (users.find(u => u.name === name)) { alert('這個名字已存在'); return; }
+  users.push({ name, emoji: _selectedUserEmoji });
+  saveUsers(users);
+  loginUser(name);
+}
+
+// ==================== Google Sheets 同步 ====================
+async function sheetsAdd(lang, wordObj) {
+  if (!state.currentUser) return;
+  try {
+    await callScript({ type: 'sheets_add', user: state.currentUser, lang, word: wordObj });
+  } catch(e) { console.warn('Sheets 寫入失敗:', e.message); }
+}
+
+async function sheetsDelete(lang, word) {
+  if (!state.currentUser) return;
+  try {
+    await callScript({ type: 'sheets_delete', user: state.currentUser, lang, word });
+  } catch(e) { console.warn('Sheets 刪除失敗:', e.message); }
+}
+
+async function sheetsUpdate(lang, word, stage, nextReview) {
+  if (!state.currentUser) return;
+  try {
+    await callScript({ type: 'sheets_update', user: state.currentUser, lang, word, stage, nextReview });
+  } catch(e) { console.warn('Sheets 更新失敗:', e.message); }
+}
+
+async function refreshFromSheets() {
+  if (!state.currentUser) return;
+  showToast('🔄 從雲端讀取...');
+  try {
+    const data = await callScript({ type: 'sheets_read', user: state.currentUser });
+    state.words = data.words || [];
+    state.jaWords = data.jaWords || [];
+    save();
+    renderWordList();
+    updateHome();
+    showToast('✅ 同步完成！');
+  } catch(e) {
+    showToast('❌ 同步失敗：' + e.message);
+  }
+}
 function setCurrentXp(val) { if (state.lang === 'ja') state.jaXp = val; else state.enXp = val; }
 
 // 今日複習單字
@@ -317,8 +496,9 @@ function setWordSort(sort) {
 
 function renderWordItem(w, i, isJa) {
   const icons = ['🍎','🐶','⭐','🎈','🌈','🦁','🌸','🚀','🎵','🍭','🐠','🌻'];
-  const sc = (w.streak||0) >= 5 ? 'streak-great' : (w.streak||0) >= 2 ? 'streak-good' : 'streak-new';
-  const sl = (w.streak||0) >= 5 ? '🌟 熟練' : (w.streak||0) >= 2 ? '✅ 還不錯' : '🆕 新字';
+  const stage = w.stage !== undefined ? w.stage : (w.streak || 0);
+  const sc = getSrsClass(stage);
+  const sl = getSrsLabel(stage);
   if (isJa) {
     const idx = state.jaWords.indexOf(w);
     return `<div class="word-item word-item-card">
@@ -425,8 +605,10 @@ function addWord() {
   const sentence = document.getElementById('addSentence').value.trim();
   if (!en || !zh) { showToast('⚠️ 請填入英文和中文'); return; }
   if (state.words.find(x => x.en.toLowerCase() === en.toLowerCase())) { showToast(`⚠️ 單字庫已有「${en}」`); return; }
-  state.words.push({ en, zh, pos, sentence, streak: 0, nextReview: Date.now() });
+  const wordObj = { en, zh, pos, sentence, stage: 0, streak: 0, nextReview: Date.now() + 3 * 86400000 };
+  state.words.push(wordObj);
   save();
+  sheetsAdd('en', wordObj);
   ['addWord','addZh','addPos','addSentence'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('lookupStatus').style.display = 'none';
   _lastLookedUp = '';
@@ -441,8 +623,10 @@ function addJaWord() {
   const sentence = document.getElementById('addSentenceJa').value.trim();
   if (!word || !zh) { showToast('⚠️ 請填入日文和中文'); return; }
   if (state.jaWords.find(x => x.word === word)) { showToast(`⚠️ 單字庫已有「${word}」`); return; }
-  state.jaWords.push({ word, reading, zh, pos, sentence, streak: 0, nextReview: Date.now() });
+  const wordObj = { word, reading, zh, pos, sentence, stage: 0, streak: 0, nextReview: Date.now() + 3 * 86400000 };
+  state.jaWords.push(wordObj);
   save();
+  sheetsAdd('ja', wordObj);
   ['addWordJa','addZhJa','addReadingJa','addPosJa','addSentenceJa'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('lookupStatusJa').style.display = 'none';
   _lastLookedUp = '';
@@ -450,10 +634,20 @@ function addJaWord() {
 }
 
 function deleteWord(idx) {
-  if (confirm('確定要刪除這個單字嗎？')) { state.words.splice(idx, 1); save(); renderWordList(); showToast('🗑 已刪除'); }
+  if (confirm('確定要刪除這個單字嗎？')) {
+    const w = state.words[idx];
+    state.words.splice(idx, 1); save();
+    sheetsDelete('en', w.en);
+    renderWordList(); showToast('🗑 已刪除');
+  }
 }
 function deleteJaWord(idx) {
-  if (confirm('確定要刪除這個單字嗎？')) { state.jaWords.splice(idx, 1); save(); renderWordList(); showToast('🗑 已刪除'); }
+  if (confirm('確定要刪除這個單字嗎？')) {
+    const w = state.jaWords[idx];
+    state.jaWords.splice(idx, 1); save();
+    sheetsDelete('ja', w.word);
+    renderWordList(); showToast('🗑 已刪除');
+  }
 }
 
 // ==================== XP ====================
@@ -885,8 +1079,14 @@ function checkAnswer() {
     document.getElementById('feedbackAnswer').textContent = '';
     quiz.correct++; state.totalCorrect++;
     if (q.type === 'spelling') {
-      q.word.streak = (q.word.streak||0) + 1;
-      q.word.nextReview = Date.now() + Math.pow(2, q.word.streak) * 86400000;
+      const { stage, nextReview } = calcNextReview(q.word.stage || 0, true);
+      q.word.stage = stage; q.word.streak = stage;
+      q.word.nextReview = nextReview;
+      const lang = state.lang === 'ja' ? 'ja' : 'en';
+      sheetsUpdate(lang, getWordKey(q.word), stage, nextReview);
+      // 顯示下次複習時間提示
+      const days = SRS_STAGES[stage]?.days;
+      document.getElementById('feedbackAnswer').textContent = days ? `下次複習：${days}天後` : '已熟練！';
     }
     playCorrectSound();
     if (Math.random() < 0.4) confetti();
@@ -896,10 +1096,13 @@ function checkAnswer() {
     document.getElementById('feedbackText').textContent = '沒關係，再加油！';
     document.getElementById('feedbackAnswer').textContent = `正確答案：${q.type === 'spelling' ? getWordKey(q.word) : correct}`;
     if (q.type === 'spelling') {
-      q.word.streak = 0; q.word.nextReview = Date.now() + 600000;
+      const { stage, nextReview } = calcNextReview(q.word.stage || 0, false);
+      q.word.stage = stage; q.word.streak = stage;
+      q.word.nextReview = nextReview;
       const lang = state.lang === 'ja' ? 'ja' : 'en';
       if (!state.wrongWords[lang]) state.wrongWords[lang] = {};
       state.wrongWords[lang][getWordKey(q.word)] = (state.wrongWords[lang][getWordKey(q.word)] || 0) + 1;
+      sheetsUpdate(lang, getWordKey(q.word), stage, nextReview);
     }
   }
   document.getElementById('checkBtn').style.display = 'none';
@@ -998,7 +1201,7 @@ function renderFlashcard() {
       <div class="flashcard-front ${flipped ? 'hidden' : ''}">
         <div class="flashcard-word">${wordKey}</div>
         ${w.pos ? `<div class="flashcard-pos">${isJa ? (w.reading || '') : w.pos}</div>` : ''}
-        <div style="margin:20px 0 16px">
+        <div style="margin:24px 0 24px">
           <button class="speak-btn" style="margin:0 auto;display:flex" onclick="event.stopPropagation();speak('${esc(wordKey)}','${speakLang}')">🔊</button>
         </div>
         <div class="flashcard-hint">點卡片查看中文</div>
@@ -1006,7 +1209,7 @@ function renderFlashcard() {
       <div class="flashcard-back ${flipped ? '' : 'hidden'}">
         <div class="flashcard-zh">${w.zh}</div>
         ${w.sentence ? `<div class="flashcard-sentence">${w.sentence}</div>` : ''}
-        <div style="margin:20px 0 8px">
+        <div style="margin:24px 0 8px">
           <button class="speak-btn" style="margin:0 auto;display:flex" onclick="event.stopPropagation();speak('${esc(wordKey)}','${speakLang}')">🔊</button>
         </div>
       </div>
@@ -1028,13 +1231,11 @@ function flipCard() {
 
 function reviewAnswer(remembered) {
   const w = reviewState.words[reviewState.idx];
-  if (remembered) {
-    w.streak = (w.streak || 0) + 1;
-    w.nextReview = Date.now() + Math.pow(2, w.streak) * 86400000;
-  } else {
-    w.streak = 0;
-    w.nextReview = Date.now() + 86400000; // 明天再複習
-  }
+  const { stage, nextReview } = calcNextReview(w.stage || 0, remembered);
+  w.stage = stage; w.streak = stage;
+  w.nextReview = nextReview;
+  const lang = state.lang === 'ja' ? 'ja' : 'en';
+  sheetsUpdate(lang, getWordKey(w), stage, nextReview);
   save();
   reviewState.idx++;
   reviewState.flipped = false;
@@ -1353,6 +1554,22 @@ function renderSettings() {
   const s = state.settings;
   screen.innerHTML = `
     <div class="settings-card">
+      <h3>👤 用戶</h3>
+      <div class="settings-row">
+        <div class="settings-label">目前：${state.currentUser || '未登入'}</div>
+        <button onclick="showUserSelect()" style="background:#E3F2FD;color:var(--sky-dark);border:none;border-radius:10px;padding:8px 14px;font-family:'Nunito',sans-serif;font-size:13px;font-weight:800;cursor:pointer">切換用戶</button>
+      </div>
+    </div>
+
+    <div class="settings-card">
+      <h3>☁️ 雲端同步</h3>
+      <p style="font-size:13px;color:var(--text-soft);margin-bottom:12px">新增/刪除單字時自動同步到雲端。手動同步可讀取最新資料。</p>
+      <button onclick="refreshFromSheets()" style="width:100%;background:linear-gradient(135deg,#26C6DA,#00838F);color:white;border:none;border-radius:12px;padding:12px;font-family:'Nunito',sans-serif;font-size:14px;font-weight:800;cursor:pointer">
+        🔄 從雲端重新整理單字庫
+      </button>
+    </div>
+
+    <div class="settings-card">
       <h3>📚 學習設定</h3>
       <div class="settings-row">
         <div class="settings-label">每日複習單字數</div>
@@ -1382,7 +1599,7 @@ function renderSettings() {
     <div class="settings-card" style="border-top:3px solid var(--red)">
       <h3>⚠️ 危險操作</h3>
       <button onclick="clearAllData()" style="width:100%;background:#FFEBEE;color:var(--red);border:none;border-radius:12px;padding:13px;font-family:'Nunito',sans-serif;font-size:14px;font-weight:800;cursor:pointer">
-        🗑 清除所有資料
+        🗑 清除此用戶的本機資料
       </button>
     </div>`;
 }
@@ -1444,6 +1661,11 @@ function confetti() {
 }
 
 // ==================== BOOT ====================
-load();
-renderNav();
-updateHome();
+const lastUser = getLastUser();
+if (lastUser && getAllUsers().find(u => u.name === lastUser)) {
+  // 有上次登入的用戶，直接登入
+  loginUser(lastUser);
+} else {
+  // 沒有用戶或找不到，顯示用戶選擇頁
+  showUserSelect();
+}
