@@ -475,12 +475,38 @@ function stripEmoji(text) {
   return text.replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27FF}]|[\u{2B00}-\u{2BFF}]|[\u{FE00}-\u{FEFF}]|[\u{1F900}-\u{1F9FF}]|[\u{1FA00}-\u{1FA9F}]/gu, '').trim();
 }
 
+// Web Speech API：單字、測驗用（即時，無延遲）
 function speak(text, lang = 'en-US', rate = 0.85) {
   if (!window.speechSynthesis) { showToast('此裝置不支援語音'); return; }
   window.speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(stripEmoji(text));
   u.lang = lang; u.rate = rate;
   window.speechSynthesis.speak(u);
+}
+
+// Gemini TTS：故事朗讀用（真人語音）
+let _ttsAudio = null;
+async function speakGemini(text, lang = 'en') {
+  try {
+    // 停止現有播放
+    if (_ttsAudio) { _ttsAudio.pause(); _ttsAudio = null; }
+    const result = await callScript({ type: 'tts', text: stripEmoji(text), lang });
+    const audio = new Audio(`data:${result.mimeType};base64,${result.audioData}`);
+    _ttsAudio = audio;
+    return new Promise((resolve) => {
+      audio.onended = resolve;
+      audio.onerror = resolve;
+      audio.play();
+    });
+  } catch(e) {
+    // fallback 到 Web Speech
+    const langCode = lang === 'ja' ? 'ja-JP' : 'en-US';
+    speak(text, langCode, LEVEL_RATES[storyState.level] || 0.85);
+  }
+}
+
+function stopGeminiTTS() {
+  if (_ttsAudio) { _ttsAudio.pause(); _ttsAudio.currentTime = 0; _ttsAudio = null; }
 }
 
 // ==================== HIRAGANA 50音 ====================
@@ -1236,33 +1262,34 @@ async function importVocab() {
 
 function speakSentence(idx) {
   stopReading();
+function speakSentence(idx) {
+  stopReading();
   const el = document.getElementById('story-sent-' + idx);
   if (!el) return;
   el.classList.add('speaking');
-  const lang = state.lang === 'ja' ? 'ja-JP' : 'en-US';
-  const u = new SpeechSynthesisUtterance(stripEmoji(storyState.sentences[idx]));
-  u.lang = lang; u.rate = LEVEL_RATES[storyState.level] || 0.85;
-  u.onend = () => el.classList.remove('speaking');
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(u);
+  const lang = state.lang === 'ja' ? 'ja' : 'en';
+  speakGemini(storyState.sentences[idx], lang).then(() => {
+    el.classList.remove('speaking');
+  });
 }
 
 function readStoryAll() {
   stopReading();
   const sentences = storyState.sentences;
   if (!sentences.length) return;
-  const lang = state.lang === 'ja' ? 'ja-JP' : 'en-US';
-  const rate = LEVEL_RATES[storyState.level] || 0.85;
+  const lang = state.lang === 'ja' ? 'ja' : 'en';
   let idx = 0;
-  function speakNext() {
-    if (idx >= sentences.length) { clearHighlight(); return; }
+  let cancelled = false;
+  window._storyReadCancelled = () => { cancelled = true; };
+  async function speakNext() {
+    if (cancelled || idx >= sentences.length) { clearHighlight(); return; }
     clearHighlight();
     const el = document.getElementById('story-sent-' + idx);
     if (el) el.classList.add('speaking');
-    const u = new SpeechSynthesisUtterance(stripEmoji(sentences[idx]));
-    u.lang = lang; u.rate = rate;
-    u.onend = () => { idx++; speakNext(); };
-    window.speechSynthesis.speak(u);
+    await speakGemini(sentences[idx], lang);
+    if (el) el.classList.remove('speaking');
+    idx++;
+    speakNext();
   }
   speakNext();
 }
@@ -1273,18 +1300,19 @@ function readStoryStep() {
   clearHighlight();
   const el = document.getElementById('story-sent-' + idx);
   if (el) { el.classList.add('speaking'); el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
-  const lang = state.lang === 'ja' ? 'ja-JP' : 'en-US';
-  const u = new SpeechSynthesisUtterance(stripEmoji(storyState.sentences[idx]));
-  u.lang = lang; u.rate = LEVEL_RATES[storyState.level] || 0.85;
-  u.onend = () => el && el.classList.remove('speaking');
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(u);
+  const lang = state.lang === 'ja' ? 'ja' : 'en';
+  speakGemini(storyState.sentences[idx], lang).then(() => {
+    if (el) el.classList.remove('speaking');
+  });
   storyState.stepIdx++;
 }
 
 function stopReading() {
+  if (window._storyReadCancelled) { window._storyReadCancelled(); window._storyReadCancelled = null; }
+  stopGeminiTTS();
   window.speechSynthesis && window.speechSynthesis.cancel();
-  clearHighlight(); storyState.stepIdx = 0;
+  clearHighlight();
+  storyState.stepIdx = 0;
 }
 
 function clearHighlight() {
