@@ -761,8 +761,13 @@ function getWordKey(word) { return state.lang === 'ja' ? word.word : word.en; }
 function getSpacedWords() {
   const now = Date.now();
   const words = state.lang === 'ja' ? state.jaWords : state.words;
-  const due = words.filter(w => w.nextReview <= now);
-  const notDue = words.filter(w => w.nextReview > now);
+  // 先取到期的，按 stage 低的優先，相同 stage 按 nextReview 舊的優先
+  const due = words
+    .filter(w => w.nextReview <= now)
+    .sort((a, b) => (a.stage||0) - (b.stage||0) || a.nextReview - b.nextReview);
+  const notDue = words
+    .filter(w => w.nextReview > now)
+    .sort((a, b) => (a.stage||0) - (b.stage||0) || a.nextReview - b.nextReview);
   return [...due, ...notDue].slice(0, 10);
 }
 
