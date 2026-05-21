@@ -593,7 +593,7 @@ function addWord() {
   const sentence = document.getElementById('addSentence').value.trim();
   if (!en || !zh) { showToast('⚠️ 請填入英文和中文'); return; }
   if (state.words.find(x => x.en.toLowerCase() === en.toLowerCase())) { showToast(`⚠️ 單字庫已有「${en}」`); return; }
-  const wordObj = { en, zh, pos, sentence, stage: 0, streak: 0, nextReview: Date.now() + 3 * 86400000 };
+  const wordObj = { en, zh, pos, sentence, stage: 0, streak: 0, nextReview: Date.now() };
   state.words.push(wordObj);
   save();
   sheetsAdd('en', wordObj);
@@ -611,7 +611,7 @@ function addJaWord() {
   const sentence = document.getElementById('addSentenceJa').value.trim();
   if (!word || !zh) { showToast('⚠️ 請填入日文和中文'); return; }
   if (state.jaWords.find(x => x.word === word)) { showToast(`⚠️ 單字庫已有「${word}」`); return; }
-  const wordObj = { word, reading, zh, pos, sentence, stage: 0, streak: 0, nextReview: Date.now() + 3 * 86400000 };
+  const wordObj = { word, reading, zh, pos, sentence, stage: 0, streak: 0, nextReview: Date.now() };
   state.jaWords.push(wordObj);
   save();
   sheetsAdd('ja', wordObj);
@@ -657,30 +657,40 @@ function speak(text, lang, rate) {
 }
 
 let _ttsAudio = null;
+let _ttsPlaying = false;
 
 async function speakGemini(text, lang) {
   lang = lang || 'en';
   const langCode = lang === 'ja' ? 'ja-JP' : 'en-US';
   const rate = LEVEL_RATES[storyState.level] || 0.85;
 
+  // 防止重複播放
+  if (_ttsPlaying) { stopGeminiTTS(); }
+  _ttsPlaying = true;
+
   try {
     if (_ttsAudio) { _ttsAudio.pause(); _ttsAudio = null; }
     const result = await callScript({ type: 'tts', text: stripEmoji(text), lang });
     if (!result.audioData) throw new Error('沒有音訊資料');
+
+    // 再次檢查是否已被取消
+    if (!_ttsPlaying) return;
+
     const audio = new Audio(`data:${result.mimeType || 'audio/wav'};base64,${result.audioData}`);
     _ttsAudio = audio;
     return new Promise((resolve) => {
-      audio.onended = resolve;
+      audio.onended = () => { _ttsPlaying = false; resolve(); };
       audio.onerror = () => {
-        // 音訊播放失敗，fallback
+        _ttsPlaying = false;
         speakWebSpeech(text, langCode, rate).then(resolve);
       };
       audio.play().catch(() => {
+        _ttsPlaying = false;
         speakWebSpeech(text, langCode, rate).then(resolve);
       });
     });
   } catch(e) {
-    // API 失敗，fallback 到 Web Speech
+    _ttsPlaying = false;
     return speakWebSpeech(text, langCode, rate);
   }
 }
@@ -715,6 +725,7 @@ async function testTTS() {
 }
 
 function stopGeminiTTS() {
+  _ttsPlaying = false;
   if (_ttsAudio) { _ttsAudio.pause(); _ttsAudio.currentTime = 0; _ttsAudio = null; }
   window.speechSynthesis && window.speechSynthesis.cancel();
 }
@@ -1155,7 +1166,7 @@ async function importVocab() {
     if (isJa) {
       const word = v.word || v.en || '';
       if (!word || state.jaWords.find(x => x.word === word)) continue;
-      const wordObj = { word, reading: v.reading||'', zh: v.zh||'', pos: v.pos||'', sentence: v.sentence||'', stage: 0, streak: 0, nextReview: Date.now() + 3 * 86400000 };
+      const wordObj = { word, reading: v.reading||'', zh: v.zh||'', pos: v.pos||'', sentence: v.sentence||'', stage: 0, streak: 0, nextReview: Date.now() };
       state.jaWords.push(wordObj);
       sheetsAdd('ja', wordObj);
     } else {
@@ -1165,7 +1176,7 @@ async function importVocab() {
       if (!pos) {
         try { const r = await callScript({ type: 'lookup', word: en }); pos = r.pos||''; sentence = r.sentence||sentence; zh = r.zh||zh; } catch(e) {}
       }
-      const wordObj = { en, zh, pos, sentence, stage: 0, streak: 0, nextReview: Date.now() + 3 * 86400000 };
+      const wordObj = { en, zh, pos, sentence, stage: 0, streak: 0, nextReview: Date.now() };
       state.words.push(wordObj);
       sheetsAdd('en', wordObj);
     }
@@ -1286,7 +1297,7 @@ function setHiraMode(mode) { hiraganaState.mode = mode; renderHiraganaScreen(); 
 function autoAddHiraganaWord(wordData) {
   if (!wordData || !wordData.word || wordData.zh === '(查詢失敗)') return;
   if (state.jaWords.find(x => x.word === wordData.word)) return;
-  const wordObj = { word: wordData.word, reading: wordData.word, zh: wordData.zh, pos: '名詞', sentence: '', stage: 0, streak: 0, nextReview: Date.now() + 3 * 86400000 };
+  const wordObj = { word: wordData.word, reading: wordData.word, zh: wordData.zh, pos: '名詞', sentence: '', stage: 0, streak: 0, nextReview: Date.now() };
   state.jaWords.push(wordObj);
   sheetsAdd('ja', wordObj);
 }
