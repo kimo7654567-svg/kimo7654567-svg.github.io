@@ -659,40 +659,17 @@ function speak(text, lang, rate) {
 let _ttsAudio = null;
 let _ttsPlaying = false;
 
-async function speakGemini(text, lang) {
+function speakGemini(text, lang) {
   lang = lang || 'en';
   const langCode = lang === 'ja' ? 'ja-JP' : 'en-US';
   const rate = LEVEL_RATES[storyState.level] || 0.85;
+  return speakWebSpeech(text, langCode, rate);
+}
 
-  // 防止重複播放
-  if (_ttsPlaying) { stopGeminiTTS(); }
-  _ttsPlaying = true;
-
-  try {
-    if (_ttsAudio) { _ttsAudio.pause(); _ttsAudio = null; }
-    const result = await callScript({ type: 'tts', text: stripEmoji(text), lang });
-    if (!result.audioData) throw new Error('沒有音訊資料');
-
-    // 再次檢查是否已被取消
-    if (!_ttsPlaying) return;
-
-    const audio = new Audio(`data:${result.mimeType || 'audio/wav'};base64,${result.audioData}`);
-    _ttsAudio = audio;
-    return new Promise((resolve) => {
-      audio.onended = () => { _ttsPlaying = false; resolve(); };
-      audio.onerror = () => {
-        _ttsPlaying = false;
-        speakWebSpeech(text, langCode, rate).then(resolve);
-      };
-      audio.play().catch(() => {
-        _ttsPlaying = false;
-        speakWebSpeech(text, langCode, rate).then(resolve);
-      });
-    });
-  } catch(e) {
-    _ttsPlaying = false;
-    return speakWebSpeech(text, langCode, rate);
-  }
+function stopGeminiTTS() {
+  _ttsPlaying = false;
+  if (_ttsAudio) { _ttsAudio.pause(); _ttsAudio.currentTime = 0; _ttsAudio = null; }
+  window.speechSynthesis && window.speechSynthesis.cancel();
 }
 
 function speakWebSpeech(text, langCode, rate) {
@@ -1199,7 +1176,6 @@ function speakSentence(idx) {
   if (!el) return;
   el.classList.add('speaking');
   const lang = state.lang === 'ja' ? 'ja' : 'en';
-  showToast('⏳ 載入語音...', 8000);
   speakGemini(storyState.sentences[idx], lang).then(() => {
     el.classList.remove('speaking');
   });
@@ -1213,7 +1189,6 @@ function readStoryAll() {
   let idx = 0;
   let cancelled = false;
   window._storyReadCancelled = function() { cancelled = true; };
-  showToast('⏳ 載入語音...', 8000);
   async function speakNext() {
     if (cancelled || idx >= sentences.length) { clearHighlight(); return; }
     clearHighlight();
