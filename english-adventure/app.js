@@ -651,9 +651,25 @@ function speak(text, lang, rate) {
   rate = rate || 0.85;
   if (!window.speechSynthesis) { showToast('此裝置不支援語音'); return; }
   window.speechSynthesis.cancel();
+  // iPad Safari 需要先 resume 才能發音
+  if (window.speechSynthesis.paused) window.speechSynthesis.resume();
   const u = new SpeechSynthesisUtterance(stripEmoji(text));
   u.lang = lang; u.rate = rate;
   window.speechSynthesis.speak(u);
+}
+
+function speakWebSpeech(text, langCode, rate) {
+  return new Promise((resolve) => {
+    if (!window.speechSynthesis) { resolve(); return; }
+    window.speechSynthesis.cancel();
+    if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+    const u = new SpeechSynthesisUtterance(stripEmoji(text));
+    u.lang = langCode || 'en-US';
+    u.rate = rate || 0.85;
+    u.onend = resolve;
+    u.onerror = resolve;
+    window.speechSynthesis.speak(u);
+  });
 }
 
 let _ttsAudio = null;
@@ -672,18 +688,7 @@ function stopGeminiTTS() {
   window.speechSynthesis && window.speechSynthesis.cancel();
 }
 
-function speakWebSpeech(text, langCode, rate) {
-  return new Promise((resolve) => {
-    if (!window.speechSynthesis) { resolve(); return; }
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(stripEmoji(text));
-    u.lang = langCode || 'en-US';
-    u.rate = rate || 0.85;
-    u.onend = resolve;
-    u.onerror = resolve;
-    window.speechSynthesis.speak(u);
-  });
-}
+
 
 async function testTTS() {
   showToast('⏳ 測試中...', 10000);
@@ -787,7 +792,6 @@ function renderQuestion() {
       autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false"
       style="max-width:240px;margin:0 auto 12px;display:block">`;
   document.getElementById('questionCard').innerHTML = html;
-  setTimeout(() => speakQuestion(), 400);
 }
 
 function speakQuestion() {
