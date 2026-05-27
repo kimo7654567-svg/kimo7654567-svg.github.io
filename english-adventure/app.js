@@ -830,8 +830,8 @@ function checkAnswer() {
     if (Math.random() < 0.4) confetti();
   } else {
     fb.className = 'feedback-box wrong';
-    document.getElementById('feedbackEmoji').textContent = '💪';
-    document.getElementById('feedbackText').textContent = '沒關係，再加油！';
+    document.getElementById('feedbackEmoji').textContent = '❌';
+    document.getElementById('feedbackText').textContent = '';
     document.getElementById('feedbackAnswer').textContent = `正確答案：${correct}`;
     const { stage, nextReview } = calcNextReview(q.word.stage || 0, false);
     q.word.stage = stage; q.word.streak = stage; q.word.nextReview = nextReview;
@@ -1455,7 +1455,7 @@ function checkHiraAnswer(correct) {
     playCorrectSound();
   } else {
     fb.className = 'feedback-box wrong';
-    fb.innerHTML = `<div class="feedback-emoji">💪</div><div class="feedback-text">再加油！</div><div class="feedback-answer">正確答案：${correct}（${HIRAGANA_ROMAJI[correct]}）</div>`;
+    fb.innerHTML = `<div class="feedback-emoji">❌</div><div class="feedback-answer">正確答案：${correct}（${HIRAGANA_ROMAJI[correct]}）</div>`;
     state.wrongWords.ja = state.wrongWords.ja || {};
     state.wrongWords.ja[correct] = (state.wrongWords.ja[correct] || 0) + 1;
   }
