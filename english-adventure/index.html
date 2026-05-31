@@ -23,7 +23,7 @@
 <div class="header">
   <div>
     <div class="header-title">⭐ 語言<span>冒險</span></div>
-    <div style="font-size:10px;color:rgba(255,255,255,0.6);font-weight:600">v1.12</div>
+    <div style="font-size:10px;color:rgba(255,255,255,0.6);font-weight:600" id="appVersion"></div>
   </div>
   <div class="header-right">
     <!-- 語言切換 -->
@@ -160,7 +160,7 @@
   <div id="storySetup">
     <div class="story-header-card">
       <h2>📚 AI 故事</h2>
-      <p>選擇難度和主題，AI 幫你生成一篇量身訂做的故事，還可以朗讀！</p>
+      <p>選擇難度，AI 自動生成適合你的故事，融入你正在學習的單字！</p>
     </div>
     <div class="story-config-card" id="levelConfigCard">
       <h3>📊 選擇難度</h3>
@@ -172,10 +172,6 @@
         <button class="level-chip" data-level="L4" onclick="selectLevel('L4')"><span class="lv-code">L4</span>Upper-Int<br><span style="font-size:9px;opacity:0.7">B2</span></button>
         <button class="level-chip" data-level="L5" onclick="selectLevel('L5')"><span class="lv-code">L5</span>Advanced<br><span style="font-size:9px;opacity:0.7">C1</span></button>
       </div>
-    </div>
-    <div class="story-config-card">
-      <h3>🎭 選擇主題</h3>
-      <div class="genre-grid" id="genreGrid"></div>
     </div>
     <button class="story-gen-btn" id="storyGenBtn" onclick="generateStory()">📖 生成故事！</button>
   </div>
