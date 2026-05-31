@@ -1048,15 +1048,12 @@ async function generateStory() {
     const learnedWords = isJa ? optimizedWords.map(w => w.word) : optimizedWords.map(w => w.en);
     const mustWords = isJa ? mustReview.map(w => w.word) : mustReview.map(w => w.en);
 
-    // Debug：顯示傳給 AI 的單字
-    console.log('mustWords:', mustWords);
-    console.log('learnedWords:', learnedWords);
     showToast(`📤 傳給AI：必用 ${mustWords.length} 個，可用 ${learnedWords.length} 個`, 4000);
 
+    // 最多重試2次，確保 mustWords 出現在故事裡
     const data = await callScript({
       type: isJa ? 'ja_story' : 'story',
       level: storyState.level,
-      genre: storyState.genre,
       learned_words: learnedWords,
       must_words: mustWords
     });
@@ -1073,7 +1070,6 @@ async function generateStory() {
     const levelNames = { 'L0.5':'Graphic Reader', L1: isJa?'入門 N5':'Starter A1', L2: isJa?'初級 N4':'Elementary A2', L3: isJa?'中級 N3':'Intermediate B1', L4:'Upper-Int B2', L5:'Advanced C1' };
     document.getElementById('storyTitle').textContent = data.title || '故事';
     document.getElementById('storyMeta').innerHTML = `
-      <span class="story-badge">${storyState.genre}</span>
       <span class="story-badge">${levelNames[storyState.level]||storyState.level}</span>
       <span class="story-badge">⏱ ${data.reading_time||''}</span>`;
 
