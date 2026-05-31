@@ -1048,6 +1048,11 @@ async function generateStory() {
     const learnedWords = isJa ? optimizedWords.map(w => w.word) : optimizedWords.map(w => w.en);
     const mustWords = isJa ? mustReview.map(w => w.word) : mustReview.map(w => w.en);
 
+    // Debug：顯示傳給 AI 的單字
+    console.log('mustWords:', mustWords);
+    console.log('learnedWords:', learnedWords);
+    showToast(`📤 傳給AI：必用 ${mustWords.length} 個，可用 ${learnedWords.length} 個`, 4000);
+
     const data = await callScript({
       type: isJa ? 'ja_story' : 'story',
       level: storyState.level,
