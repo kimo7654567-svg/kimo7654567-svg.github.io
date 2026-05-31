@@ -1127,7 +1127,8 @@ async function generateStoryImage() {
   const imgArea = document.getElementById('storyImageArea');
   imgArea.innerHTML = `<div class="story-img-loading"><span class="loading-dots" style="color:var(--teal-dark)"><span></span><span></span><span></span></span><p>AI 繪製插圖中...</p></div>`;
   try {
-    const result = await callScript({ type: 'image', title: storyState.currentTitle, genre: storyState.currentGenre, level: storyState.level });
+    const storyText = storyState.sentences.slice(0, 5).join(' '); // 取前5句
+    const result = await callScript({ type: 'image', story: storyText, level: storyState.level });
     if (result.imageData) {
       imgArea.innerHTML = `<img src="data:image/png;base64,${result.imageData}" alt="故事插圖" class="story-img">`;
     } else {
