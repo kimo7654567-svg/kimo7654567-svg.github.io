@@ -690,6 +690,18 @@ function stopGeminiTTS() {
 
 
 
+function debugStoryWords() {
+  const isJa = state.lang === 'ja';
+  const allWords = isJa ? state.jaWords : state.words;
+  const mustReview = allWords.filter(w => (w.stage||0) <= 1).slice(0, 10);
+  const shouldReview = allWords.filter(w => (w.stage||0) === 2).slice(0, 10);
+  const mustWords = isJa ? mustReview.map(w => w.word) : mustReview.map(w => w.en);
+  const shouldWords = isJa ? shouldReview.map(w => w.word) : shouldReview.map(w => w.en);
+
+  const msg = `必用(stage 0-1)：${mustWords.join(', ') || '無'}\n\n可用(stage 2)：${shouldWords.join(', ') || '無'}`;
+  alert(msg);
+}
+
 async function testTTS() {
   showToast('⏳ 測試中...', 10000);
   try {
@@ -1047,6 +1059,8 @@ async function generateStory() {
     const optimizedWords = [...mustReview, ...shouldReview].slice(0, 20);
     const learnedWords = isJa ? optimizedWords.map(w => w.word) : optimizedWords.map(w => w.en);
     const mustWords = isJa ? mustReview.map(w => w.word) : mustReview.map(w => w.en);
+    // 全部單字庫作為黑名單（Key Vocabulary 不能選這些）
+    const allKnownWords = isJa ? allWords.map(w => w.word) : allWords.map(w => w.en);
 
     showToast(`📤 傳給AI：必用 ${mustWords.length} 個，可用 ${learnedWords.length} 個`, 4000);
 
@@ -1055,7 +1069,8 @@ async function generateStory() {
       type: isJa ? 'ja_story' : 'story',
       level: storyState.level,
       learned_words: learnedWords,
-      must_words: mustWords
+      must_words: mustWords,
+      all_known_words: allKnownWords
     });
 
     storyState.sentences = data.sentences || [];
