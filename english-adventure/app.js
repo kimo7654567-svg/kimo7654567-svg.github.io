@@ -1055,8 +1055,11 @@ async function generateStory() {
   try {
     const allWords = isJa ? state.jaWords : state.words;
     const mustReview = allWords.filter(w => (w.stage||0) <= 1).slice(0, 10);
-    const shouldReview = allWords.filter(w => (w.stage||0) === 2).slice(0, 10);
-    const optimizedWords = [...mustReview, ...shouldReview].slice(0, 20);
+    const needed = Math.max(0, 10 - mustReview.length);
+    const shouldReview = needed > 0
+      ? allWords.filter(w => (w.stage||0) === 2).slice(0, needed)
+      : [];
+    const optimizedWords = [...mustReview, ...shouldReview];
     const learnedWords = isJa ? optimizedWords.map(w => w.word) : optimizedWords.map(w => w.en);
     const mustWords = isJa ? mustReview.map(w => w.word) : mustReview.map(w => w.en);
     // 全部單字庫作為黑名單（Key Vocabulary 不能選這些）
