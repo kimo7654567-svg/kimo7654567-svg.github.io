@@ -174,6 +174,7 @@
       </div>
     </div>
     <button class="story-gen-btn" id="storyGenBtn" onclick="generateStory()">📖 生成故事！</button>
+    <button onclick="debugStoryWords()" style="width:100%;background:#E3F2FD;color:var(--sky-dark);border:none;border-radius:12px;padding:10px;font-family:'Nunito',sans-serif;font-size:13px;font-weight:800;cursor:pointer;margin-top:8px">🔍 查看傳給AI的單字</button>
   </div>
 
   <div id="storyResult" class="story-result-wrap">
@@ -187,6 +188,7 @@
         <div class="story-result-card">
           <div class="story-title" id="storyTitle"></div>
           <div class="story-meta" id="storyMeta"></div>
+          <div id="storyDebugWords"></div>
           <div class="story-read-controls">
             <button class="story-ctrl-btn btn-read-all" onclick="readStoryAll()">🔊 整篇朗讀</button>
             <button class="story-ctrl-btn btn-read-step" onclick="readStoryStep()">▶️ 逐句朗讀</button>
