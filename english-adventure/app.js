@@ -1065,9 +1065,8 @@ async function generateStory() {
     // 全部單字庫作為黑名單（Key Vocabulary 不能選這些）
     const allKnownWords = isJa ? allWords.map(w => w.word) : allWords.map(w => w.en);
 
-    showToast(`📤 傳給AI：必用 ${mustWords.length} 個，可用 ${learnedWords.length} 個`, 4000);
+    showToast(`📤 傳給AI：必用 ${mustWords.length} 個`, 3000);
 
-    // 最多重試2次，確保 mustWords 出現在故事裡
     const data = await callScript({
       type: isJa ? 'ja_story' : 'story',
       level: storyState.level,
@@ -1090,6 +1089,17 @@ async function generateStory() {
     document.getElementById('storyMeta').innerHTML = `
       <span class="story-badge">${levelNames[storyState.level]||storyState.level}</span>
       <span class="story-badge">⏱ ${data.reading_time||''}</span>`;
+
+    // 顯示傳給 AI 的單字
+    const debugArea = document.getElementById('storyDebugWords');
+    if (debugArea) {
+      const extraWords = learnedWords.filter(w => !mustWords.includes(w));
+      debugArea.innerHTML = mustWords.length > 0 ? `
+        <div style="background:#FFF9C4;border-radius:12px;padding:10px 14px;font-size:12px;color:#5D4037;margin-bottom:8px;line-height:1.8">
+          <strong>📌 必用單字：</strong>${mustWords.join(', ')}
+          ${extraWords.length > 0 ? `<br><strong>➕ 補充單字：</strong>${extraWords.join(', ')}` : ''}
+        </div>` : '';
+    }
 
     document.getElementById('storyBody').innerHTML = (data.sentences||[])
       .map((s,i) => `<span class="story-sent" id="story-sent-${i}" onclick="speakSentence(${i})">${s} </span>`).join('');
