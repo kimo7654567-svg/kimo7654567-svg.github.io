@@ -693,12 +693,11 @@ function stopGeminiTTS() {
 function debugStoryWords() {
   const isJa = state.lang === 'ja';
   const allWords = isJa ? state.jaWords : state.words;
-  const mustReview = allWords.filter(w => (w.stage||0) <= 1).slice(0, 10);
-  const shouldReview = allWords.filter(w => (w.stage||0) === 2).slice(0, 10);
-  const mustWords = isJa ? mustReview.map(w => w.word) : mustReview.map(w => w.en);
-  const shouldWords = isJa ? shouldReview.map(w => w.word) : shouldReview.map(w => w.en);
-
-  const msg = `必用(stage 0-1)：${mustWords.join(', ') || '無'}\n\n可用(stage 2)：${shouldWords.join(', ') || '無'}`;
+  const stage0 = allWords.filter(w => (w.stage||0) === 0).map(w => w.en || w.word);
+  const stage1 = allWords.filter(w => (w.stage||0) === 1).map(w => w.en || w.word);
+  const stage2 = allWords.filter(w => (w.stage||0) === 2).map(w => w.en || w.word);
+  const stage3 = allWords.filter(w => (w.stage||0) === 3).map(w => w.en || w.word);
+  const msg = `Stage 0 (${stage0.length}個): ${stage0.join(', ')||'無'}\n\nStage 1 (${stage1.length}個): ${stage1.join(', ')||'無'}\n\nStage 2 (${stage2.length}個): ${stage2.join(', ')||'無'}\n\nStage 3 (${stage3.length}個): ${stage3.join(', ')||'無'}`;
   alert(msg);
 }
 
@@ -1054,10 +1053,11 @@ async function generateStory() {
   const isJa = state.lang === 'ja';
   try {
     const allWords = isJa ? state.jaWords : state.words;
-    const mustReview = allWords.filter(w => (w.stage||0) <= 1).slice(0, 10);
+    const stage01 = allWords.filter(w => (w.stage||0) <= 1).sort(() => Math.random() - 0.5);
+    const mustReview = stage01.slice(0, 10);
     const needed = Math.max(0, 10 - mustReview.length);
     const shouldReview = needed > 0
-      ? allWords.filter(w => (w.stage||0) === 2).slice(0, needed)
+      ? allWords.filter(w => (w.stage||0) === 2).sort(() => Math.random() - 0.5).slice(0, needed)
       : [];
     const optimizedWords = [...mustReview, ...shouldReview];
     const learnedWords = isJa ? optimizedWords.map(w => w.word) : optimizedWords.map(w => w.en);
