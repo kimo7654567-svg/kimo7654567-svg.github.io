@@ -187,6 +187,7 @@ function openPhotoDialog() {
   $('#photoDialogTitle').textContent = '新增餐點';
   $('#reviewNotice').textContent = '以下皆為照片估算值。請確認並修改後再保存。';
   $('#addManualFoodBtn').classList.add('hidden');
+  $('#saveMealBtn').textContent = '確認並保存這一餐';
   $('#photos').value = '';
   $('#cameraPhotos').value = '';
   renderPreviews();
@@ -221,6 +222,7 @@ function editMeal(group) {
   $('#photoDialogTitle').textContent = '修改餐點';
   $('#reviewNotice').textContent = '修改後會更新這一餐的文字與營養紀錄。';
   $('#addManualFoodBtn').classList.remove('hidden');
+  $('#saveMealBtn').textContent = '儲存修改';
   renderFoodEditor();
   $('#photoDialog').showModal();
 }
@@ -252,6 +254,7 @@ function openManualEntry() {
   $('#photoDialogTitle').textContent = '手動新增餐點';
   $('#reviewNotice').textContent = '只要填食物名稱；重量與熱量不知道可以留空，由 AI 估算。';
   $('#addManualFoodBtn').classList.remove('hidden');
+  $('#saveMealBtn').textContent = '加入餐點草稿';
   renderFoodEditor();
   $('#photoDialog').showModal();
 }
@@ -294,6 +297,7 @@ async function analyzePhotos() {
     let photoFoods = [];
     if (state.files.length) { const images = []; for (const file of state.files) images.push(await compressImage(file)); const result = await callApi('analyze_food', { images }); if (!result.is_food_image) { toast(result.reason || '無法可靠辨識食物'); return; } photoFoods = result.foods; }
     state.analysis = { foods: [...photoFoods, ...state.draftFoods] };
+    $('#saveMealBtn').textContent = '確認並保存這一餐';
     renderFoodEditor();
     $('#captureStep').classList.add('hidden');
     $('#reviewStep').classList.remove('hidden');
