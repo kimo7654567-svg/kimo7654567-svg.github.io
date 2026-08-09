@@ -1,6 +1,3 @@
-Exit code: 0
-Wall time: 0.2 seconds
-Output:
 const $ = selector => document.querySelector(selector);
 const state = { members: [], active: null, profile: null, files: [], analysis: null, customAvatar: '', editRecordId: '', draftFoods: [], favorites: [] };
 const avatarIds = ['adult-1', 'adult-2', 'child-1', 'child-2'];
@@ -473,5 +470,3 @@ const summaryThird = $('#vegetables').closest('article'); summaryThird.querySele
 $('#logBtn').textContent = '飲水／步數';
 const home = $('#homeView'); const panels = home.querySelectorAll('.panel'); const summary = home.querySelector('.summary'); home.insertBefore(panels[0], summary); home.insertBefore(panels[1], summary);
 loadMembers();
-
-
