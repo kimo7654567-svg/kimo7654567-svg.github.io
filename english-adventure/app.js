@@ -29,6 +29,7 @@ let state = {
   words: [],
   jaWords: [],
   hiragana: {},
+  jaGrammar: { answered: 0, correct: 0 },
   enXp: 0,
   jaXp: 0,
   xp: 0,
@@ -118,6 +119,7 @@ function load(userName) {
         state.wrongWords = { en: state.wrongWords, ja: {} };
       }
       if (!state.hiddenWords) state.hiddenWords = { en: [], ja: [] };
+      if (!state.jaGrammar) state.jaGrammar = { answered: 0, correct: 0 };
       if (!Array.isArray(state.hiddenWords.en)) state.hiddenWords.en = [];
       if (!Array.isArray(state.hiddenWords.ja)) state.hiddenWords.ja = [];
       state.words.forEach(w => { if (w.stage === undefined) w.stage = Math.min(w.streak || 0, 5); });
@@ -126,7 +128,7 @@ function load(userName) {
     } else {
       state = {
         lang: 'en', currentUser: userName || null,
-        words: [], jaWords: [], hiragana: {},
+        words: [], jaWords: [], hiragana: {}, jaGrammar: { answered: 0, correct: 0 },
         enXp: 0, jaXp: 0, xp: 0,
         totalQuizzes: 0, totalCorrect: 0,
         wrongWords: { en: {}, ja: {} },
@@ -377,6 +379,7 @@ function renderNav() {
     nav.innerHTML = `
       <button class="nav-btn active" onclick="showScreen('home')" id="nav-home"><span class="icon">🏠</span>首頁</button>
       <button class="nav-btn" onclick="showScreen('hiragana')" id="nav-hiragana"><span class="icon">あ</span>50音</button>
+      <button class="nav-btn" onclick="showScreen('grammar')" id="nav-grammar"><span class="icon">文</span>句型</button>
       <button class="nav-btn" onclick="showScreen('words')" id="nav-words"><span class="icon">📖</span>單字庫</button>
       <button class="nav-btn" onclick="showScreen('quiz')" id="nav-quiz"><span class="icon">🎯</span>測驗</button>
       <button class="nav-btn" onclick="showScreen('story')" id="nav-story"><span class="icon">📚</span>故事</button>
@@ -399,6 +402,7 @@ function showScreen(name) {
   if (name === 'quiz') resetQuiz();
   if (name === 'story') renderGenreGrid(storyState.level);
   if (name === 'hiragana') renderHiraganaScreen();
+  if (name === 'grammar') renderJapaneseGrammar();
   if (name === 'settings') renderSettings();
 }
 
@@ -1366,6 +1370,144 @@ function clearHighlight() {
 }
 
 // ==================== 50音 ====================
+// ==================== JAPANESE GRAMMAR ====================
+const JA_PATTERNS = [
+  { pattern: 'これは 〇〇です。', zh: '這是○○。', example: 'これは りんごです。', tip: '把物品放進〇〇。' },
+  { pattern: 'わたしは 〇〇です。', zh: '我是○○。', example: 'わたしは がくせいです。', tip: '「は」標示正在談論的人。' },
+  { pattern: '〇〇が います。', zh: '有○○（人或動物）。', example: 'ねこが います。', tip: '「います」用於人或動物。' },
+  { pattern: '〇〇を 〇〇ます。', zh: '做某個動作。', example: 'みずを のみます。', tip: '「を」放在動作對象後面。' },
+  { pattern: '〇〇へ いきます。', zh: '前往○○。', example: 'がっこうへ いきます。', tip: '助詞「へ」在這裡讀作「え」。' },
+  { pattern: '〇〇が すきです。', zh: '喜歡○○。', example: 'りんごが すきです。', tip: '「すき」前面使用「が」。' },
+];
+
+const JA_PARTICLES = [
+  { particle: 'は', reading: 'wa', meaning: '正在談論的主題', example: 'わたしは こどもです。', zh: '我是小孩。' },
+  { particle: 'が', reading: 'ga', meaning: '誰、什麼存在或被喜歡', example: 'いぬが います。', zh: '有一隻狗。' },
+  { particle: 'を', reading: 'o', meaning: '動作的對象', example: 'パンを たべます。', zh: '吃麵包。' },
+  { particle: 'に', reading: 'ni', meaning: '時間或到達的位置', example: 'しちじに おきます。', zh: '七點起床。' },
+  { particle: 'で', reading: 'de', meaning: '進行動作的場所', example: 'がっこうで べんきょうします。', zh: '在學校讀書。' },
+];
+
+const JA_POLITE_PHRASES = [
+  { ja: 'おはようございます', zh: '早安', when: '早上見面時' },
+  { ja: 'こんにちは', zh: '你好', when: '白天見面時' },
+  { ja: 'ありがとうございます', zh: '謝謝', when: '受到幫助時' },
+  { ja: 'すみません', zh: '不好意思／對不起', when: '打擾、道歉或引起注意時' },
+  { ja: 'おねがいします', zh: '麻煩你了／拜託了', when: '提出請求時' },
+  { ja: 'いただきます', zh: '我要開動了', when: '用餐前' },
+  { ja: 'ごちそうさまでした', zh: '謝謝招待', when: '用餐後' },
+];
+
+const JA_GRAMMAR_QUESTIONS = [
+  { type: 'particle', prompt: '我是學生。', sentence: 'わたし __ がくせいです。', options: ['は','が','を','に'], answer: 'は', completed: 'わたしは がくせいです。', explain: '「は」標示這句正在談論「我」。' },
+  { type: 'particle', prompt: '有一隻貓。', sentence: 'ねこ __ います。', options: ['を','で','が','は'], answer: 'が', completed: 'ねこが います。', explain: '表示人或動物存在時使用「が います」。' },
+  { type: 'particle', prompt: '喝水。', sentence: 'みず __ のみます。', options: ['が','を','に','で'], answer: 'を', completed: 'みずを のみます。', explain: '水是「喝」這個動作的對象，所以使用「を」。' },
+  { type: 'particle', prompt: '七點起床。', sentence: 'しちじ __ おきます。', options: ['で','は','に','を'], answer: 'に', completed: 'しちじに おきます。', explain: '明確時間後面使用「に」。' },
+  { type: 'particle', prompt: '在學校讀書。', sentence: 'がっこう __ べんきょうします。', options: ['が','に','で','を'], answer: 'で', completed: 'がっこうで べんきょうします。', explain: '學校是進行「讀書」這個動作的場所，所以使用「で」。' },
+  { type: 'particle', prompt: '我喜歡蘋果。', sentence: 'わたしは りんご __ すきです。', options: ['を','が','で','に'], answer: 'が', completed: 'わたしは りんごが すきです。', explain: '「すきです」前面使用「が」。' },
+  { type: 'pattern', prompt: '哪一句是「這是蘋果」？', options: ['これは りんごです。','りんごを のみます。','りんごが います。'], answer: 'これは りんごです。', completed: 'これは りんごです。', explain: '介紹眼前的物品可以使用「これは 〇〇です」。' },
+  { type: 'pattern', prompt: '哪一句是「我喝水」？', options: ['わたしは みずです。','わたしは みずを のみます。','みずが います。'], answer: 'わたしは みずを のみます。', completed: 'わたしは みずを のみます。', explain: '「みず」是喝的對象，因此使用「みずを のみます」。' },
+  { type: 'pattern', prompt: '哪一句是「去學校」？', options: ['がっこうへ いきます。','がっこうを たべます。','がっこうが すきます。'], answer: 'がっこうへ いきます。', completed: 'がっこうへ いきます。', explain: '前往某地使用「地點へ いきます」。' },
+  { type: 'pattern', prompt: '哪一句是「我喜歡貓」？', options: ['わたしは ねこを いきます。','わたしは ねこが すきです。','わたしは ねこで のみます。'], answer: 'わたしは ねこが すきです。', completed: 'わたしは ねこが すきです。', explain: '表達喜歡時使用「〇〇が すきです」。' },
+];
+
+let jaGrammarUi = { tab: 'patterns', question: 0, answered: false };
+
+function renderJapaneseGrammar() {
+  const screen = document.getElementById('screen-grammar');
+  if (!screen) return;
+  const stats = state.jaGrammar || { answered: 0, correct: 0 };
+  const rate = stats.answered ? Math.round(stats.correct / stats.answered * 100) : 0;
+  screen.innerHTML = `
+    <div class="grammar-hero">
+      <div><h2>🇯🇵 日文句型教室</h2><p>先學會完整句子，再慢慢認識助詞。</p></div>
+      <div class="grammar-score">${stats.correct} / ${stats.answered}<small>答對 ${rate}%</small></div>
+    </div>
+    <div class="grammar-tabs">
+      <button class="grammar-tab ${jaGrammarUi.tab==='patterns'?'active':''}" onclick="setJapaneseGrammarTab('patterns')">🧩 基礎句型</button>
+      <button class="grammar-tab ${jaGrammarUi.tab==='practice'?'active':''}" onclick="setJapaneseGrammarTab('practice')">🎯 助詞練習</button>
+      <button class="grammar-tab ${jaGrammarUi.tab==='polite'?'active':''}" onclick="setJapaneseGrammarTab('polite')">🙇 禮貌用語</button>
+    </div>
+    <div id="grammarContent"></div>`;
+  renderJapaneseGrammarContent();
+}
+
+function setJapaneseGrammarTab(tab) {
+  jaGrammarUi.tab = tab;
+  jaGrammarUi.answered = false;
+  renderJapaneseGrammar();
+}
+
+function renderJapaneseGrammarContent() {
+  const content = document.getElementById('grammarContent');
+  if (!content) return;
+  if (jaGrammarUi.tab === 'patterns') {
+    content.innerHTML = `
+      <div class="grammar-note">現在先使用禮貌的 <strong>です／ます</strong>。點擊喇叭聽完整句子。</div>
+      <div class="pattern-list">${JA_PATTERNS.map(item => `
+        <div class="pattern-card">
+          <div class="pattern-top"><span class="pattern-main">${item.pattern}</span><button onclick="speak('${esc(item.example)}','ja-JP',0.75)">🔊</button></div>
+          <div class="pattern-zh">${item.zh}</div>
+          <div class="pattern-example">${item.example}</div>
+          <div class="pattern-tip">💡 ${item.tip}</div>
+        </div>`).join('')}</div>
+      <div class="particle-title">五個核心助詞</div>
+      <div class="particle-grid">${JA_PARTICLES.map(item => `
+        <div class="particle-card"><span>${item.particle}</span><small>${item.reading}</small><strong>${item.meaning}</strong><p>${item.example}<br>${item.zh}</p></div>`).join('')}</div>`;
+    return;
+  }
+  if (jaGrammarUi.tab === 'polite') {
+    content.innerHTML = `
+      <div class="grammar-note">先把這些當成完整說法使用，不需要背複雜的敬語規則。</div>
+      <div class="polite-list">${JA_POLITE_PHRASES.map(item => `
+        <div class="polite-card"><button onclick="speak('${esc(item.ja)}','ja-JP',0.75)">🔊</button><div><strong>${item.ja}</strong><span>${item.zh}</span><small>${item.when}</small></div></div>`).join('')}</div>`;
+    return;
+  }
+  renderJapaneseGrammarQuestion();
+}
+
+function renderJapaneseGrammarQuestion() {
+  const content = document.getElementById('grammarContent');
+  const q = JA_GRAMMAR_QUESTIONS[jaGrammarUi.question % JA_GRAMMAR_QUESTIONS.length];
+  content.innerHTML = `
+    <div class="grammar-question-card">
+      <div class="grammar-question-count">第 ${jaGrammarUi.question % JA_GRAMMAR_QUESTIONS.length + 1}／${JA_GRAMMAR_QUESTIONS.length} 題</div>
+      <div class="grammar-question-type">${q.type === 'particle' ? '選出正確的助詞' : '選出正確的句型'}</div>
+      <div class="grammar-question-zh">${q.prompt}</div>
+      ${q.sentence ? `<div class="grammar-blank-sentence">${q.sentence}</div>` : ''}
+      <div class="grammar-options">${q.options.map((option, index) => `<button onclick="answerJapaneseGrammar(this,${index})">${option}</button>`).join('')}</div>
+      <div class="grammar-feedback" id="grammarFeedback"></div>
+      <button class="grammar-next" id="grammarNext" onclick="nextJapaneseGrammarQuestion()">下一題 ➜</button>
+    </div>`;
+}
+
+function answerJapaneseGrammar(button, optionIndex) {
+  if (jaGrammarUi.answered) return;
+  jaGrammarUi.answered = true;
+  const q = JA_GRAMMAR_QUESTIONS[jaGrammarUi.question % JA_GRAMMAR_QUESTIONS.length];
+  const chosen = q.options[optionIndex];
+  const correct = chosen === q.answer;
+  document.querySelectorAll('.grammar-options button').forEach(btn => {
+    btn.disabled = true;
+    if (btn.textContent === q.answer) btn.classList.add('correct');
+  });
+  if (!correct) button.classList.add('wrong');
+  state.jaGrammar = state.jaGrammar || { answered: 0, correct: 0 };
+  state.jaGrammar.answered++;
+  if (correct) state.jaGrammar.correct++;
+  save();
+  const feedback = document.getElementById('grammarFeedback');
+  feedback.className = `grammar-feedback show ${correct ? 'correct' : 'wrong'}`;
+  feedback.innerHTML = `<strong>${correct ? '答對了！' : '再記一次'}</strong><span>${q.completed}</span><p>${q.explain}</p><button onclick="speak('${esc(q.completed)}','ja-JP',0.75)">🔊 聽句子</button>`;
+  document.getElementById('grammarNext').style.display = 'block';
+}
+
+function nextJapaneseGrammarQuestion() {
+  jaGrammarUi.question = (jaGrammarUi.question + 1) % JA_GRAMMAR_QUESTIONS.length;
+  jaGrammarUi.answered = false;
+  renderJapaneseGrammar();
+}
+
 let hiraganaState = { currentIdx: 0, mode: 'practice' };
 const HIRAGANA_SPECIAL_LESSONS = {
   'を': { word: 'を', kanji: '', zh: '表示受詞的助詞，通常讀作「お」', emoji: '🔗', pos: '助詞', addToVocab: false, practiced: false },

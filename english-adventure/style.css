@@ -268,6 +268,58 @@ body { font-family: 'Nunito', sans-serif; background: var(--bg); color: var(--te
 .vocab-import-btn { width: 100%; background: linear-gradient(135deg, #26C6DA, #00838F); color: white; border: none; border-radius: 12px; padding: 12px; font-family: 'Nunito', sans-serif; font-size: 14px; font-weight: 800; cursor: pointer; margin-top: 12px; }
 .story-back-btn { width: 100%; background: #E0F7FA; color: var(--teal-dark); border: none; border-radius: 12px; padding: 12px; font-family: 'Nunito', sans-serif; font-size: 14px; font-weight: 800; cursor: pointer; margin-bottom: 30px; }
 
+/* ========== JAPANESE GRAMMAR ========== */
+#screen-grammar { width: 100%; max-width: 100vw; overflow-x: hidden; }
+.grammar-hero { background: linear-gradient(135deg,#F06292,#AD1457); color: white; border-radius: 20px; padding: 18px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px; box-shadow: 0 5px 16px rgba(173,20,87,0.25); }
+.grammar-hero > div:first-child { min-width: 0; }
+.grammar-hero h2 { font-size: 21px; margin-bottom: 4px; }
+.grammar-hero p { font-size: 13px; opacity: 0.9; }
+.grammar-score { background: rgba(255,255,255,0.2); border-radius: 14px; padding: 9px 12px; text-align: center; font-size: 18px; font-weight: 900; white-space: nowrap; }
+.grammar-score small { display: block; font-size: 10px; margin-top: 2px; }
+.grammar-tabs { display: grid; grid-template-columns: repeat(3,1fr); gap: 7px; margin-bottom: 14px; }
+.grammar-tab { border: 2px solid #F8BBD0; background: white; color: #AD1457; border-radius: 12px; padding: 10px 4px; font-family: 'Nunito',sans-serif; font-size: 12px; font-weight: 800; cursor: pointer; }
+.grammar-tab.active { background: #FCE4EC; border-color: #E91E63; }
+.grammar-note { background: #FFF8E1; color: #6D4C41; border-left: 4px solid #FFB300; border-radius: 10px; padding: 11px 12px; margin-bottom: 12px; font-size: 13px; line-height: 1.6; }
+.pattern-list { display: grid; gap: 10px; }
+.pattern-card { background: white; border-radius: 16px; padding: 14px; box-shadow: 0 2px 9px rgba(0,0,0,0.06); }
+.pattern-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pattern-top button,.polite-card button { border: none; background: #FCE4EC; border-radius: 50%; width: 34px; height: 34px; flex-shrink: 0; cursor: pointer; }
+.pattern-main { font-size: 19px; font-weight: 900; color: #880E4F; }
+.pattern-zh { color: var(--text-soft); font-size: 13px; margin-top: 3px; }
+.pattern-example { background: #FFF0F5; color: #4A148C; border-radius: 9px; padding: 8px 10px; margin-top: 9px; font-size: 17px; font-weight: 800; }
+.pattern-tip { color: #6D4C41; font-size: 12px; margin-top: 7px; }
+.particle-title { font-size: 16px; font-weight: 900; margin: 18px 0 9px; }
+.particle-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 9px; }
+.particle-card { background: white; border-radius: 14px; padding: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+.particle-card > span { color: #E91E63; font-size: 30px; font-weight: 900; vertical-align: middle; }
+.particle-card > small { color: #9E9E9E; margin-left: 5px; }
+.particle-card > strong { display: block; font-size: 12px; color: var(--text); margin: 3px 0 6px; }
+.particle-card p { font-size: 11px; color: var(--text-soft); line-height: 1.6; }
+.polite-list { display: grid; gap: 9px; }
+.polite-card { background: white; border-radius: 15px; padding: 13px; display: flex; align-items: center; gap: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.polite-card div { display: flex; flex-direction: column; gap: 2px; }
+.polite-card strong { color: #880E4F; font-size: 17px; }
+.polite-card span { color: var(--text); font-size: 13px; font-weight: 700; }
+.polite-card small { color: var(--text-soft); font-size: 11px; }
+.grammar-question-card { background: white; border-radius: 20px; padding: 18px; box-shadow: 0 4px 14px rgba(0,0,0,0.08); }
+.grammar-question-count { color: #AD1457; font-size: 12px; font-weight: 800; }
+.grammar-question-type { font-size: 14px; font-weight: 800; margin-top: 10px; }
+.grammar-question-zh { font-size: 20px; font-weight: 900; margin: 8px 0 12px; }
+.grammar-blank-sentence { background: #FFF0F5; color: #4A148C; border-radius: 12px; padding: 14px; text-align: center; font-size: 21px; font-weight: 900; margin-bottom: 12px; }
+.grammar-options { display: grid; gap: 8px; }
+.grammar-options button { background: #F8FBFF; color: var(--text); border: 2px solid #E3F2FD; border-radius: 12px; padding: 12px; font-family: 'Nunito',sans-serif; font-size: 17px; font-weight: 800; cursor: pointer; }
+.grammar-options button.correct { background: #E8F5E9; border-color: #43A047; color: #2E7D32; }
+.grammar-options button.wrong { background: #FFEBEE; border-color: #EF5350; color: #C62828; }
+.grammar-feedback { display: none; border-radius: 12px; padding: 12px; margin-top: 12px; }
+.grammar-feedback.show { display: flex; flex-direction: column; gap: 5px; }
+.grammar-feedback.correct { background: #E8F5E9; color: #1B5E20; }
+.grammar-feedback.wrong { background: #FFF3E0; color: #BF360C; }
+.grammar-feedback span { font-size: 17px; font-weight: 900; }
+.grammar-feedback p { font-size: 12px; line-height: 1.5; }
+.grammar-feedback button { align-self: flex-start; background: white; border: none; border-radius: 9px; padding: 7px 10px; font-weight: 800; cursor: pointer; }
+.grammar-next { display: none; width: 100%; border: none; border-radius: 12px; padding: 12px; margin-top: 10px; background: linear-gradient(135deg,#F06292,#AD1457); color: white; font-family: 'Nunito',sans-serif; font-size: 15px; font-weight: 900; cursor: pointer; }
+@media (max-width:380px) { .grammar-hero { align-items: flex-start; } .grammar-tabs { grid-template-columns: 1fr; } .particle-grid { grid-template-columns: 1fr; } }
+
 /* ========== HIRAGANA 50音 ========== */
 .hira-header-card { background: linear-gradient(135deg, var(--pink), var(--pink-dark)); border-radius: 20px; padding: 20px; color: white; margin-bottom: 16px; box-shadow: 0 6px 20px rgba(233,30,99,0.3); }
 .hira-header-card h2 { font-family: 'Baloo 2', cursive; font-size: 22px; font-weight: 800; margin-bottom: 4px; }
