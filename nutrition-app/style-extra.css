@@ -3,3 +3,17 @@
 .panel-head input { width: auto; margin: 0; }
 .active-member #editMemberBtn { margin-left: auto; }
 .active-member #switchBtn { margin-left: 0; }
+.capture-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+.capture-actions .upload { margin: 0; padding: 18px 10px; cursor: pointer; }
+.capture-actions button { grid-column: 1 / -1; border: 1px solid var(--line); border-radius: 12px; padding: 11px; background: var(--card); }
+.avatar-upload { display: inline-block; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; cursor: pointer; }
+.avatar-upload input { display: none; }
+.custom-avatar { width: 72px; height: 72px; object-fit: cover; border-radius: 50%; border: 3px solid var(--green); vertical-align: middle; margin-left: 10px; }
+.member img, .active-member img { object-fit: cover; background: var(--soft); }
+.meal-card { border-top: 1px solid var(--line); padding: 14px 0; }
+.meal-head { display: flex; justify-content: space-between; gap: 12px; }
+.meal-head p { margin: 3px 0; }
+.meal-head small { color: var(--muted); }
+.meal-head button { border: 1px solid var(--line); border-radius: 9px; background: white; padding: 6px 8px; margin-left: 4px; }
+.meal-card details { margin-top: 10px; }
+@media(max-width:600px){.capture-actions{grid-template-columns:1fr 1fr}.meal-head{align-items:flex-start}.meal-head>div:last-child{white-space:nowrap}}

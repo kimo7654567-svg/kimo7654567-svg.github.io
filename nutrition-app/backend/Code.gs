@@ -39,6 +39,8 @@ function routeRequest(body) {
     case 'update_profile': return updateProfile(body.memberId, body.profile);
     case 'analyze_food': return analyzeFood(body.images);
     case 'save_meal': return saveMeal(body.memberId, body.meal);
+    case 'update_meal': return updateMeal(body.memberId, body.recordId, body.meal);
+    case 'delete_meal': return deleteMeal(body.memberId, body.recordId);
     case 'get_meals': return getMeals(body.memberId, body.date);
     case 'daily_summary': return getDailySummary(body.memberId, body.date);
     case 'weekly_summary': return getWeeklySummary(body.memberId, body.weekStart);
@@ -87,7 +89,9 @@ function createMember(profile) {
 
 function getProfile(memberId) {
   const context = getMemberContext(memberId);
-  const rows = rowsAsObjects(context.book.getSheetByName('Profile'));
+  const profileSheet = context.book.getSheetByName('Profile');
+  migrateSheetHeaders(profileSheet, PROFILE_HEADERS);
+  const rows = rowsAsObjects(profileSheet);
   if (!rows.length) throw new Error('找不到個人資料');
   return normalizeStoredProfile(rows[0]);
 }
@@ -125,11 +129,10 @@ function analyzeFood(images) {
 }
 
 function saveMeal(memberId, meal) {
-  if (!meal || !Array.isArray(meal.foods) || !meal.foods.length) throw new Error('沒有可保存的食物');
-  requireDate(meal.date, '日期');
+  validateMealInput(meal);
   const context = getMemberContext(memberId);
   const sheet = context.book.getSheetByName('Meals');
-  const recordId = Utilities.getUuid();
+  const recordId = meal.record_id || Utilities.getUuid();
   const now = new Date().toISOString();
   const rows = meal.foods.map(food => {
     validateFood(food);
@@ -147,6 +150,33 @@ function saveMeal(memberId, meal) {
   });
   appendObjects(sheet, MEAL_HEADERS, rows);
   return { record_id: recordId, saved_items: rows.length };
+}
+
+function updateMeal(memberId, recordId, meal) {
+  requireText(recordId, '餐點 ID', 100);
+  validateMealInput(meal);
+  const existing = getMeals(memberId, meal.date).some(row => String(row.record_id) === String(recordId));
+  if (!existing) throw new Error('找不到要修改的餐點');
+  deleteMeal(memberId, recordId);
+  meal.record_id = recordId;
+  return saveMeal(memberId, meal);
+}
+
+function validateMealInput(meal) {
+  if (!meal || !Array.isArray(meal.foods) || !meal.foods.length) throw new Error('沒有可保存的食物');
+  requireDate(meal.date, '日期');
+  requireText(meal.meal_type, '餐別', 20);
+  meal.foods.forEach(validateFood);
+}
+
+function deleteMeal(memberId, recordId) {
+  requireText(recordId, '餐點 ID', 100);
+  const sheet = getMemberContext(memberId).book.getSheetByName('Meals');
+  const rows = rowsAsObjects(sheet);
+  const rowNumbers = rows.map((row, index) => String(row.record_id) === String(recordId) ? index + 2 : 0).filter(Boolean);
+  if (!rowNumbers.length) throw new Error('找不到要刪除的餐點');
+  rowNumbers.sort((a, b) => b - a).forEach(rowNumber => sheet.deleteRow(rowNumber));
+  return { record_id: recordId, deleted_items: rowNumbers.length };
 }
 
 function getMeals(memberId, date) {
@@ -409,7 +439,7 @@ function validateProfile(profile) {
   if (!profile) throw new Error('缺少個人資料');
   requireText(profile.name, '名稱', 50); requireDate(profile.birthday, '生日');
   requireText(profile.sex, '性別', 20); requireText(profile.activity_level, '活動量', 20);
-  requireText(profile.avatar_id, '人像', 50);
+  validateAvatar(profile.avatar_id);
   numberInRange(profile.height_cm, 30, 250, '身高'); numberInRange(profile.weight_kg, 1, 500, '體重');
   if (!toBoolean(profile.is_child) && !profile.goal) throw new Error('成人需要選擇目標');
   if (profile.usual_daily_steps != null && profile.usual_daily_steps !== '') numberInRange(profile.usual_daily_steps, 0, 100000, '每日步數');
@@ -421,6 +451,22 @@ function validateFood(food) {
   if (!food.nutrients) throw new Error('缺少營養估算');
   NUTRIENT_KEYS.forEach(key => numberInRange(food.nutrients[key], 0, 100000, key));
 }
+
+function migrateSheetHeaders(sheet, headers) {
+  const current = sheet.getLastColumn() ? sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].filter(String) : [];
+  if (JSON.stringify(current) === JSON.stringify(headers)) return;
+  const rows = current.length ? rowsAsObjects(sheet) : [];
+  sheet.clearContents();
+  setHeaders(sheet, headers);
+  appendObjects(sheet, headers, rows);
+}
+function validateAvatar(value) {
+  const text = String(value || '');
+  if (avatarIdsForValidation().indexOf(text) >= 0) return text;
+  if (!/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(text) || text.length > 45000) throw new Error('個人圖片格式不正確或檔案太大');
+  return text;
+}
+function avatarIdsForValidation() { return ['adult-1', 'adult-2', 'child-1', 'child-2']; }
 function normalizeProfile(memberId, profile, createdAt, updatedAt) {
   return {
     member_id: memberId, name: String(profile.name).trim(), birthday: profile.birthday,

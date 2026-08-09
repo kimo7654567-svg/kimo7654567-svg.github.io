@@ -1,10 +1,10 @@
 const $ = selector => document.querySelector(selector);
-const state = { members: [], active: null, profile: null, files: [], analysis: null };
+const state = { members: [], active: null, profile: null, files: [], analysis: null, customAvatar: '', editRecordId: '' };
 const avatarIds = ['adult-1', 'adult-2', 'child-1', 'child-2'];
 const nutrientLabels = { calories: '熱量 kcal', protein_g: '蛋白質 g', fat_g: '脂肪 g', carbohydrate_g: '碳水 g', fiber_g: '纖維 g', sodium_mg: '鈉 mg', calcium_mg: '鈣 mg', iron_mg: '鐵 mg', zinc_mg: '鋅 mg', vitamin_a_ug: '維生素 A μg', vitamin_c_mg: '維生素 C mg', vitamin_d_ug: '維生素 D μg', omega3_mg: 'Omega-3 mg' };
 
 const today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' });
-const avatarUrl = id => `avatars/${id}.svg`;
+const avatarUrl = id => String(id || '').startsWith('data:image/') ? id : `avatars/${id || 'adult-1'}.svg`;
 const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c]));
 
 function toast(message) {
@@ -65,10 +65,23 @@ async function loadDailySummary() {
 async function loadMeals() {
   try {
     const meals = await callApi('get_meals', { memberId: state.active.member_id, date: $('#historyDate').value || today() });
-    $('#mealList').innerHTML = meals.length ? meals.map(food => `<div class="food-row"><span>${escapeHtml(food.food_name)}</span><b>${Math.round(Number(food.estimated_weight_g))} g</b></div>`).join('') : '<p class="muted">今天還沒有紀錄。</p>';
+    renderMealTimeline(meals);
   } catch (error) {
     $('#mealList').innerHTML = `<p class="muted">${escapeHtml(error.message)}</p>`;
   }
+}
+
+function renderMealTimeline(rows) {
+  const labels = { breakfast: '早餐', brunch: '早午餐', lunch: '午餐', dinner: '晚餐', snack: '點心' };
+  const groups = Object.values(rows.reduce((result, row) => {
+    const id = String(row.record_id);
+    if (!result[id]) result[id] = { id, time: row.time, type: row.meal_type, foods: [], calories: 0, protein: 0 };
+    result[id].foods.push(row); result[id].calories += Number(row.calories) || 0; result[id].protein += Number(row.protein_g) || 0;
+    return result;
+  }, {})).sort((a, b) => String(a.time).localeCompare(String(b.time)));
+  $('#mealList').innerHTML = groups.length ? groups.map(group => `<article class="meal-card"><div class="meal-head"><div><b>${labels[group.type] || escapeHtml(group.type)} ${escapeHtml(group.time || '')}</b><p>${group.foods.map(food => escapeHtml(food.food_name)).join('、')}</p><small>${Math.round(group.calories)} kcal｜蛋白質 ${Math.round(group.protein)} g</small></div><div><button data-edit-meal="${group.id}">修改</button><button data-delete-meal="${group.id}">刪除</button></div></div><details><summary>查看內容</summary>${group.foods.map(food => `<div class="food-row"><span>${escapeHtml(food.food_name)}</span><b>${Math.round(Number(food.estimated_weight_g))} g</b></div>`).join('')}</details></article>`).join('') : '<p class="muted">這一天還沒有紀錄。</p>';
+  document.querySelectorAll('[data-edit-meal]').forEach(button => button.onclick = () => editMeal(groups.find(group => group.id === button.dataset.editMeal)));
+  document.querySelectorAll('[data-delete-meal]').forEach(button => button.onclick = () => deleteMeal(button.dataset.deleteMeal));
 }
 
 function openMemberDialog(profile = null) {
@@ -76,6 +89,7 @@ function openMemberDialog(profile = null) {
   form.reset();
   form.elements.namedItem('member_id').value = profile ? profile.member_id : '';
   $('#memberFormStatus').textContent = '';
+  state.customAvatar = profile && String(profile.avatar_id).startsWith('data:image/') ? profile.avatar_id : '';
   if (profile) {
     ['name', 'birthday', 'sex', 'height_cm', 'weight_kg', 'activity_level', 'usual_daily_steps', 'goal', 'allergy'].forEach(key => {
       if (form.elements[key]) form.elements[key].value = profile[key] ?? '';
@@ -83,12 +97,21 @@ function openMemberDialog(profile = null) {
     form.querySelector(`[name=is_child][value="${Boolean(profile.is_child)}"]`).checked = true;
   }
   renderAvatarOptions(profile ? profile.avatar_id : 'adult-1');
+  showCustomAvatar();
   toggleChildFields();
   $('#memberDialog').showModal();
 }
 
 function renderAvatarOptions(selected) {
   $('#avatars').innerHTML = avatarIds.map(id => `<label><input type="radio" name="avatar_id" value="${id}" ${id === selected ? 'checked' : ''}><img src="${avatarUrl(id)}" alt="人像"></label>`).join('');
+}
+
+function showCustomAvatar() { $('#customAvatarPreview').classList.toggle('hidden', !state.customAvatar); if (state.customAvatar) $('#customAvatarPreview').src = state.customAvatar; }
+async function compressAvatar(file) {
+  const bitmap = await createImageBitmap(file); const size = 160; const scale = Math.max(size / bitmap.width, size / bitmap.height);
+  const width = bitmap.width * scale; const height = bitmap.height * scale; const canvas = document.createElement('canvas');
+  canvas.width = size; canvas.height = size; canvas.getContext('2d').drawImage(bitmap, (size - width) / 2, (size - height) / 2, width, height); bitmap.close();
+  return canvas.toDataURL('image/jpeg', 0.72);
 }
 
 function toggleChildFields() {
@@ -107,7 +130,7 @@ $('#memberForm').onsubmit = async event => {
     activity_level: values.activity_level, is_child: values.is_child === 'true',
     usual_daily_steps: values.usual_daily_steps ? Number(values.usual_daily_steps) : null,
     goal: values.is_child === 'true' ? null : values.goal,
-    allergy: values.allergy || '', avatar_id: values.avatar_id,
+    allergy: values.allergy || '', avatar_id: state.customAvatar || values.avatar_id,
   };
   const memberId = values.member_id;
   try {
@@ -136,16 +159,26 @@ function openPhotoDialog() {
   state.manualEntry = false;
   state.files = [];
   state.analysis = null;
+  state.editRecordId = '';
   $('#captureStep').classList.remove('hidden');
   $('#reviewStep').classList.add('hidden');
   $('#photoDialogTitle').textContent = '新增餐點';
   $('#reviewNotice').textContent = '以下皆為照片估算值。請確認並修改後再保存。';
   $('#addManualFoodBtn').classList.add('hidden');
-  if ($('#manualMealTypeRow')) $('#manualMealTypeRow').classList.add('hidden');
   $('#photos').value = '';
   $('#cameraPhotos').value = '';
   renderPreviews();
   $('#photoDialog').showModal();
+}
+
+function editMeal(group) {
+  state.manualEntry = true; state.editRecordId = group.id; state.files = [];
+  state.analysis = { foods: group.foods.map(row => ({ name: row.food_name, quantity: Number(row.quantity) || 1, estimated_total_weight_g: Number(row.estimated_weight_g), confidence: Number(row.confidence) || 1, nutrients: Object.fromEntries(Object.keys(nutrientLabels).map(key => [key, Number(row[key]) || 0])), vegetable_serving: Number(row.vegetable_serving) || 0, fruit_serving: Number(row.fruit_serving) || 0, dairy_serving: Number(row.dairy_serving) || 0, note: row.note || '', observed_in_images: [] })) };
+  $('#mealType').value = group.type; $('#captureStep').classList.add('hidden'); $('#reviewStep').classList.remove('hidden'); $('#photoDialogTitle').textContent = '修改餐點'; $('#reviewNotice').textContent = '修改後會更新這一餐的文字與營養紀錄。'; $('#addManualFoodBtn').classList.remove('hidden'); renderFoodEditor(); $('#photoDialog').showModal();
+}
+async function deleteMeal(recordId) {
+  if (!confirm('確定刪除這一整餐嗎？此動作無法復原。')) return;
+  try { await callApi('delete_meal', { memberId: state.active.member_id, recordId }); await refreshHome(); toast('餐點已刪除'); } catch (error) { toast(error.message); }
 }
 
 function emptyManualFood() {
@@ -159,16 +192,13 @@ function emptyManualFood() {
 
 function openManualEntry() {
   state.manualEntry = true;
+  state.editRecordId = '';
   state.files = [];
   state.analysis = { foods: [emptyManualFood()] };
   $('#captureStep').classList.add('hidden');
   $('#reviewStep').classList.remove('hidden');
   $('#photoDialogTitle').textContent = '手動新增餐點';
   $('#reviewNotice').textContent = '請輸入食物名稱與重量；未填寫的營養項目會記為 0。';
-  if (!$('#manualMealTypeRow')) {
-    $('#reviewNotice').insertAdjacentHTML('beforebegin', '<label id="manualMealTypeRow">餐別<select id="manualMealType"><option value="breakfast">早餐</option><option value="brunch">早午餐</option><option value="lunch">午餐</option><option value="dinner">晚餐</option><option value="snack">點心</option></select></label>');
-  }
-  $('#manualMealTypeRow').classList.remove('hidden');
   $('#addManualFoodBtn').classList.remove('hidden');
   renderFoodEditor();
   $('#photoDialog').showModal();
@@ -243,13 +273,14 @@ function editedFoods() {
 async function saveMeal() {
   try {
     if (editedFoods().some(food => !String(food.name).trim())) throw new Error('請填寫每一項食物名稱');
-    await callApi('save_meal', { memberId: state.active.member_id, meal: { date: today(), time: new Date().toTimeString().slice(0, 5), meal_type: state.manualEntry ? $('#manualMealType').value : $('#mealType').value, foods: editedFoods() } });
+    const meal = { date: $('#historyDate').value || today(), time: new Date().toTimeString().slice(0, 5), meal_type: $('#mealType').value, foods: editedFoods() };
+    await callApi(state.editRecordId ? 'update_meal' : 'save_meal', { memberId: state.active.member_id, recordId: state.editRecordId, meal });
     state.files = [];
     state.analysis = null;
     $('#previews').innerHTML = '';
     $('#photoDialog').close();
     await refreshHome();
-    toast('已保存文字紀錄，照片未保存');
+    toast(state.editRecordId ? '餐點已更新' : '已保存文字紀錄，照片未保存');
   } catch (error) { toast(error.message); }
 }
 
@@ -293,9 +324,6 @@ $('#editMemberBtn').onclick = () => openMemberDialog(state.profile);
 $('#switchBtn').onclick = () => { $('#homeView').classList.add('hidden'); $('#membersView').classList.remove('hidden'); state.active = null; };
 $('#cameraBtn').onclick = openPhotoDialog;
 $('#manualBtn').onclick = openManualEntry;
-$('#photos').removeAttribute('capture');
-$('#photos').closest('label').childNodes[0].textContent = '從相簿選擇';
-$('#photos').closest('label').insertAdjacentHTML('beforebegin', '<label class="upload">立即拍照<input id="cameraPhotos" type="file" accept="image/jpeg,image/png,image/webp" capture="environment"></label>');
 $('#cameraPhotos').onchange = event => { addFiles(event.target.files); event.target.value = ''; };
 $('#photos').onchange = event => { addFiles(event.target.files); event.target.value = ''; };
 $('#clearPhotos').onclick = () => { state.files = []; renderPreviews(); };
@@ -311,16 +339,9 @@ $('#weeklyBtn').onclick = showWeekly;
 $('#logBtn').onclick = openDailyLog;
 $('#historyDate').onchange = loadMeals;
 document.querySelectorAll('[name=is_child]').forEach(input => input.onchange = toggleChildFields);
+$('#avatarPhoto').onchange = async event => { const file = event.target.files[0]; if (!file) return; try { state.customAvatar = await compressAvatar(file); showCustomAvatar(); } catch (error) { toast('無法處理這張圖片'); } event.target.value = ''; };
+$('#avatars').onchange = () => { state.customAvatar = ''; showCustomAvatar(); };
 document.querySelectorAll('[data-close]').forEach(button => button.onclick = () => button.closest('dialog').close());
-$('#settingsBtn').onclick = () => { $('#scriptUrl').value = getScriptUrl(); $('#settingsDialog').showModal(); };
-$('#saveSettings').onclick = async () => {
-  const url = $('#scriptUrl').value.trim();
-  if (!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec$/.test(url)) return toast('請填入 Apps Script /exec 網址');
-  localStorage.setItem('nutritionScriptUrl', url);
-  $('#settingsDialog').close();
-  await loadMembers();
-  toast('設定已儲存');
-};
 
 renderAvatarOptions('adult-1');
 loadMembers();
