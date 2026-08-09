@@ -341,16 +341,19 @@ async function saveMeal() {
     if (foods.some(food => !String(food.name).trim())) throw new Error('請填寫每一項食物名稱');
     button.disabled = true;
     if (state.manualEntry && !state.editRecordId) {
-      button.textContent = 'AI 正在估算並加入…';
+      const draftStart = state.draftFoods.length;
+      state.draftFoods.push(...foods);
+      showMealDraft();
+      $('#analyzeBtn').disabled = true;
+      toast('已加入餐點草稿，正在估算營養');
       const favoriteFlags = foods.map(food => food.save_favorite);
       const result = await callApi('analyze_manual_food', { foods: foods.map(food => ({ name: food.name, estimated_weight_g: food.estimated_total_weight_g, calories: food.nutrients.calories })) });
       foods = result.foods;
       const favorites = foods.filter((food, index) => favoriteFlags[index]);
       if (favorites.length) await callApi('save_favorites', { memberId: state.active.member_id, foods: favorites });
-      state.draftFoods.push(...foods);
-      showMealDraft();
+      state.draftFoods.splice(draftStart, foods.length, ...foods);
       await loadFavorites(); renderDraftFoods();
-      toast('已加入餐點草稿，最後再確認整餐');
+      toast('餐點草稿估算完成');
       return;
     }
     const meal = { date: $('#historyDate').value || today(), time: new Date().toTimeString().slice(0, 5), meal_type: $('#mealType').value, foods };
@@ -362,7 +365,7 @@ async function saveMeal() {
     await refreshHome();
     toast(state.editRecordId ? '餐點已更新' : '已保存文字紀錄，照片未保存');
   } catch (error) { toast(error.message); }
-  finally { button.disabled = false; button.textContent = '確認並保存這一餐'; }
+  finally { button.disabled = false; $('#analyzeBtn').disabled = false; button.textContent = '確認並保存這一餐'; }
 }
 
 function showMealDraft() {
