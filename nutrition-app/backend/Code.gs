@@ -1,6 +1,6 @@
 /** 日日好食 Cloud API — Google Apps Script */
 
-const API_VERSION = '1.3.2-simple-schema';
+const API_VERSION = '1.3.3-date-normalization';
 const MEMBER_HEADERS = ['member_id', 'name', 'is_child', 'avatar_id', 'spreadsheet_id', 'password_salt', 'password_hash', 'auth_version', 'created_at'];
 const PROFILE_HEADERS = ['member_id', 'name', 'birthday', 'sex', 'height_cm', 'weight_kg', 'activity_level', 'usual_daily_steps', 'goal', 'is_child', 'allergy', 'avatar_id', 'created_at', 'updated_at'];
 const MEAL_HEADERS = ['record_id', 'food_item_id', 'date', 'time', 'meal_type', 'food_name', 'quantity', 'estimated_weight_g', 'calories', 'protein_g', 'fat_g', 'carbohydrate_g', 'fiber_g', 'sodium_mg', 'calcium_mg', 'iron_mg', 'zinc_mg', 'vitamin_a_ug', 'vitamin_c_mg', 'vitamin_d_ug', 'omega3_mg', 'vegetable_serving', 'fruit_serving', 'dairy_serving', 'confidence', 'note', 'created_at'];
@@ -212,7 +212,7 @@ function deleteMeal(memberId, recordId) {
 function getMeals(memberId, date) {
   requireDate(date, '日期');
   const sheet = getMemberContext(memberId).book.getSheetByName('Meals');
-  return rowsAsObjects(sheet).filter(row => String(row.date) === date);
+  return rowsAsObjects(sheet).filter(row => sheetDateText(row.date) === date);
 }
 
 function saveDailyLog(memberId, log) {
@@ -240,9 +240,9 @@ function getDailySummary(memberId, date) {
   const context = getMemberContext(memberId);
   migrateSheetHeaders(context.book.getSheetByName('DailyLog'), DAILY_LOG_HEADERS);
   migrateSheetHeaders(context.book.getSheetByName('DailySummary'), DAILY_SUMMARY_HEADERS);
-  const meals = rowsAsObjects(context.book.getSheetByName('Meals')).filter(row => String(row.date) === date);
+  const meals = rowsAsObjects(context.book.getSheetByName('Meals')).filter(row => sheetDateText(row.date) === date);
   const totals = summarizeMealRows(meals);
-  const log = rowsAsObjects(context.book.getSheetByName('DailyLog')).find(row => String(row.date) === date);
+  const log = rowsAsObjects(context.book.getSheetByName('DailyLog')).find(row => sheetDateText(row.date) === date);
   const profile = getProfile(memberId);
   const result = Object.assign({ date: date, meal_items: meals.length, water_ml: log && log.water_ml !== '' ? Number(log.water_ml) : null, steps: log && log.steps !== '' ? Number(log.steps) : null }, totals);
   result.feedback = localDailyFeedback(result, profile.is_child);
@@ -257,10 +257,10 @@ function getWeeklySummary(memberId, weekStart) {
   const start = parseDate(weekStart);
   const end = new Date(start.getTime() + 6 * 86400000);
   const endText = formatDate(end);
-  const rows = rowsAsObjects(context.book.getSheetByName('Meals')).filter(row => String(row.date) >= weekStart && String(row.date) <= endText);
+  const rows = rowsAsObjects(context.book.getSheetByName('Meals')).filter(row => sheetDateText(row.date) >= weekStart && sheetDateText(row.date) <= endText);
   const grouped = {};
   rows.forEach(row => {
-    const key = String(row.date);
+    const key = sheetDateText(row.date);
     if (!grouped[key]) grouped[key] = [];
     grouped[key].push(row);
   });
@@ -269,8 +269,8 @@ function getWeeklySummary(memberId, weekStart) {
   days.forEach(day => addTotals(average, summarizeMealRows(grouped[day])));
   divideTotals(average, Math.max(days.length, 1));
   migrateSheetHeaders(context.book.getSheetByName('DailyLog'), DAILY_LOG_HEADERS);
-  const allLogs = rowsAsObjects(context.book.getSheetByName('DailyLog')).filter(row => String(row.date) >= weekStart && String(row.date) <= endText);
-  const logs = allLogs.filter(row => row.weight_kg !== '').sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const allLogs = rowsAsObjects(context.book.getSheetByName('DailyLog')).filter(row => sheetDateText(row.date) >= weekStart && sheetDateText(row.date) <= endText);
+  const logs = allLogs.filter(row => row.weight_kg !== '').sort((a, b) => sheetDateText(a.date).localeCompare(sheetDateText(b.date)));
   const stepLogs = allLogs.filter(row => row.steps !== '');
   const weightChange = logs.length >= 2 ? round1(Number(logs[logs.length - 1].weight_kg) - Number(logs[0].weight_kg)) : null;
   const result = {
@@ -428,7 +428,7 @@ function replaceObject(sheet, headers, rowNumber, object) {
 }
 function upsertByKeys(sheet, headers, object, keys) {
   const rows = rowsAsObjects(sheet);
-  const index = rows.findIndex(row => keys.every(key => String(row[key]) === String(object[key])));
+  const index = rows.findIndex(row => keys.every(key => sheetCellText(row[key]) === sheetCellText(object[key])));
   if (index >= 0) replaceObject(sheet, headers, index + 2, object); else appendObject(sheet, headers, object);
 }
 
@@ -541,6 +541,8 @@ function requireText(value, name, maxLength) { const text = String(value || '').
 function requireDate(value, name) { if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || '')) || isNaN(parseDate(value).getTime())) throw new Error(name + '格式不正確'); return value; }
 function parseDate(text) { const parts = String(text).split('-').map(Number); return new Date(parts[0], parts[1] - 1, parts[2]); }
 function formatDate(date) { return Utilities.formatDate(date, 'Asia/Taipei', 'yyyy-MM-dd'); }
+function sheetDateText(value) { return value instanceof Date && !isNaN(value.getTime()) ? formatDate(value) : String(value || ''); }
+function sheetCellText(value) { return value instanceof Date && !isNaN(value.getTime()) ? sheetDateText(value) : String(value); }
 function numberInRange(value, min, max, name) { const number = Number(value); if (!Number.isFinite(number) || number < min || number > max) throw new Error(name + '超出合理範圍'); return number; }
 function numberOrZero(value) { const number = Number(value); return Number.isFinite(number) && number >= 0 ? number : 0; }
 function round1(value) { return Math.round((Number(value) + Number.EPSILON) * 10) / 10; }
