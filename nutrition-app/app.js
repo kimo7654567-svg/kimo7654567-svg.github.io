@@ -143,6 +143,7 @@ function openPhotoDialog() {
   $('#addManualFoodBtn').classList.add('hidden');
   if ($('#manualMealTypeRow')) $('#manualMealTypeRow').classList.add('hidden');
   $('#photos').value = '';
+  $('#cameraPhotos').value = '';
   renderPreviews();
   $('#photoDialog').showModal();
 }
@@ -292,6 +293,10 @@ $('#editMemberBtn').onclick = () => openMemberDialog(state.profile);
 $('#switchBtn').onclick = () => { $('#homeView').classList.add('hidden'); $('#membersView').classList.remove('hidden'); state.active = null; };
 $('#cameraBtn').onclick = openPhotoDialog;
 $('#manualBtn').onclick = openManualEntry;
+$('#photos').removeAttribute('capture');
+$('#photos').closest('label').childNodes[0].textContent = '從相簿選擇';
+$('#photos').closest('label').insertAdjacentHTML('beforebegin', '<label class="upload">立即拍照<input id="cameraPhotos" type="file" accept="image/jpeg,image/png,image/webp" capture="environment"></label>');
+$('#cameraPhotos').onchange = event => { addFiles(event.target.files); event.target.value = ''; };
 $('#photos').onchange = event => { addFiles(event.target.files); event.target.value = ''; };
 $('#clearPhotos').onclick = () => { state.files = []; renderPreviews(); };
 $('#analyzeBtn').onclick = analyzePhotos;
