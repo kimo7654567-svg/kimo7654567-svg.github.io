@@ -1474,6 +1474,9 @@ async function renderHiraganaPractice() {
         <div class="hira-write-label">練習書寫</div>
         <div class="hira-big-canvas-wrap">
           <div class="hira-big-ghost">${char}</div>
+          <div class="hira-stroke-numbers">${(HIRAGANA_STROKE_NUMBERS[romaji] || []).map(item =>
+            `<span style="left:${item.x}%;top:${item.y}%">${item.n}</span>`
+          ).join('')}</div>
           <canvas id="hiraBigCanvas" class="hira-big-canvas" width="280" height="280"></canvas>
         </div>
         <button class="hira-clear-btn" onclick="clearBigCanvas()">🗑 清除</button>

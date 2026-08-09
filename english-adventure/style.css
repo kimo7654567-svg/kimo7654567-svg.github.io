@@ -298,8 +298,10 @@ body { font-family: 'Nunito', sans-serif; background: var(--bg); color: var(--te
 .hira-write-section { margin-bottom: 16px; }
 .hira-write-label { font-size: 13px; font-weight: 700; color: var(--text-soft); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
 .hira-big-canvas-wrap { position: relative; width: 280px; height: 280px; margin: 0 auto 12px; background: white; border-radius: 20px; }
-.hira-big-ghost { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 180px; color: #F8BBD0; pointer-events: none; user-select: none; line-height: 1; z-index: 1; }
-.hira-big-canvas { border: 3px solid #FCE4EC; border-radius: 20px; background: transparent; touch-action: none; display: block; width: 280px; height: 280px; position: relative; z-index: 2; }
+.hira-big-ghost { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-family: 'Klee One','Yu Kyokasho','UD Digi Kyokasho NP-R',sans-serif; font-size: 210px; color: #F8BBD0; pointer-events: none; user-select: none; line-height: 1; z-index: 1; }
+.hira-stroke-numbers { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+.hira-stroke-numbers span { position: absolute; transform: translate(-50%,-50%); width: 23px; height: 23px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #E91E63; color: white; border: 2px solid white; box-shadow: 0 2px 5px rgba(136,14,79,0.28); font-family: 'Nunito',sans-serif; font-size: 13px; font-weight: 900; }
+.hira-big-canvas { border: 3px solid #FCE4EC; border-radius: 20px; background: linear-gradient(to right,transparent calc(50% - 1px),#E1F5FE calc(50% - 1px),#E1F5FE calc(50% + 1px),transparent calc(50% + 1px)),linear-gradient(to bottom,transparent calc(50% - 1px),#E1F5FE calc(50% - 1px),#E1F5FE calc(50% + 1px),transparent calc(50% + 1px)); touch-action: none; display: block; width: 280px; height: 280px; position: relative; z-index: 2; }
 .hira-clear-btn { background: #FFEBEE; color: var(--red); border: none; border-radius: 10px; padding: 8px 16px; font-family: 'Nunito', sans-serif; font-size: 13px; font-weight: 800; cursor: pointer; }
 
 .hira-done-btn { width: 100%; background: linear-gradient(135deg, var(--pink), var(--pink-dark)); color: white; border: none; border-radius: 14px; padding: 14px; font-family: 'Nunito', sans-serif; font-size: 16px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 12px rgba(233,30,99,0.3); transition: all 0.15s; }
