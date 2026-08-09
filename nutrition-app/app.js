@@ -133,12 +133,43 @@ $('#memberForm').onsubmit = async event => {
 };
 
 function openPhotoDialog() {
+  state.manualEntry = false;
   state.files = [];
   state.analysis = null;
   $('#captureStep').classList.remove('hidden');
   $('#reviewStep').classList.add('hidden');
+  $('#photoDialogTitle').textContent = '新增餐點';
+  $('#reviewNotice').textContent = '以下皆為照片估算值。請確認並修改後再保存。';
+  $('#addManualFoodBtn').classList.add('hidden');
+  if ($('#manualMealTypeRow')) $('#manualMealTypeRow').classList.add('hidden');
   $('#photos').value = '';
   renderPreviews();
+  $('#photoDialog').showModal();
+}
+
+function emptyManualFood() {
+  return {
+    name: '', quantity: 1, estimated_total_weight_g: 100, confidence: 1,
+    nutrients: Object.fromEntries(Object.keys(nutrientLabels).map(key => [key, 0])),
+    vegetable_serving: 0, fruit_serving: 0, dairy_serving: 0,
+    note: '手動紀錄', observed_in_images: [],
+  };
+}
+
+function openManualEntry() {
+  state.manualEntry = true;
+  state.files = [];
+  state.analysis = { foods: [emptyManualFood()] };
+  $('#captureStep').classList.add('hidden');
+  $('#reviewStep').classList.remove('hidden');
+  $('#photoDialogTitle').textContent = '手動新增餐點';
+  $('#reviewNotice').textContent = '請輸入食物名稱與重量；未填寫的營養項目會記為 0。';
+  if (!$('#manualMealTypeRow')) {
+    $('#reviewNotice').insertAdjacentHTML('beforebegin', '<label id="manualMealTypeRow">餐別<select id="manualMealType"><option value="breakfast">早餐</option><option value="brunch">早午餐</option><option value="lunch">午餐</option><option value="dinner">晚餐</option><option value="snack">點心</option></select></label>');
+  }
+  $('#manualMealTypeRow').classList.remove('hidden');
+  $('#addManualFoodBtn').classList.remove('hidden');
+  renderFoodEditor();
   $('#photoDialog').showModal();
 }
 
@@ -192,7 +223,11 @@ async function analyzePhotos() {
 }
 
 function renderFoodEditor() {
-  $('#foodEditor').innerHTML = state.analysis.foods.map((food, index) => `<div class="food-card" data-index="${index}"><label>食物名稱<input data-key="name" value="${escapeHtml(food.name)}"></label><div class="two"><label>數量<input type="number" min="1" data-key="quantity" value="${food.quantity}"></label><label>合計重量 g<input type="number" min="0.1" step="0.1" data-key="estimated_total_weight_g" value="${food.estimated_total_weight_g}"></label></div><small class="muted">出現在照片 ${(food.observed_in_images || []).join('、')}；只計算一次</small><div class="food-grid">${Object.entries(nutrientLabels).map(([key, label]) => `<label>${label}<input type="number" min="0" step="0.1" data-nutrient="${key}" value="${food.nutrients[key]}"></label>`).join('')}</div><div class="food-grid"><label>蔬菜份<input type="number" min="0" step="0.5" data-key="vegetable_serving" value="${food.vegetable_serving || 0}"></label><label>水果份<input type="number" min="0" step="0.5" data-key="fruit_serving" value="${food.fruit_serving || 0}"></label><label>乳品份<input type="number" min="0" step="0.5" data-key="dairy_serving" value="${food.dairy_serving || 0}"></label></div><label>備註<input data-key="note" value="${escapeHtml(food.note || '')}"></label></div>`).join('');
+  $('#foodEditor').innerHTML = state.analysis.foods.map((food, index) => `<div class="food-card" data-index="${index}"><div class="dialog-head"><b>食物 ${index + 1}</b>${state.analysis.foods.length > 1 ? `<button type="button" class="remove-food" data-remove="${index}">刪除</button>` : ''}</div><label>食物名稱<input data-key="name" maxlength="100" required value="${escapeHtml(food.name)}"></label><div class="two"><label>數量<input type="number" min="1" data-key="quantity" value="${food.quantity}"></label><label>合計重量 g<input type="number" min="0.1" step="0.1" data-key="estimated_total_weight_g" value="${food.estimated_total_weight_g}"></label></div>${food.observed_in_images && food.observed_in_images.length ? `<small class="muted">出現在照片 ${food.observed_in_images.join('、')}；只計算一次</small>` : ''}<div class="food-grid">${Object.entries(nutrientLabels).map(([key, label]) => `<label>${label}<input type="number" min="0" step="0.1" data-nutrient="${key}" value="${food.nutrients[key] ?? 0}"></label>`).join('')}</div><div class="food-grid"><label>蔬菜份<input type="number" min="0" step="0.5" data-key="vegetable_serving" value="${food.vegetable_serving || 0}"></label><label>水果份<input type="number" min="0" step="0.5" data-key="fruit_serving" value="${food.fruit_serving || 0}"></label><label>乳品份<input type="number" min="0" step="0.5" data-key="dairy_serving" value="${food.dairy_serving || 0}"></label></div><label>備註<input data-key="note" value="${escapeHtml(food.note || '')}"></label></div>`).join('');
+  document.querySelectorAll('[data-remove]').forEach(button => button.onclick = () => {
+    state.analysis.foods.splice(Number(button.dataset.remove), 1);
+    renderFoodEditor();
+  });
 }
 
 function editedFoods() {
@@ -206,7 +241,8 @@ function editedFoods() {
 
 async function saveMeal() {
   try {
-    await callApi('save_meal', { memberId: state.active.member_id, meal: { date: today(), time: new Date().toTimeString().slice(0, 5), meal_type: $('#mealType').value, foods: editedFoods() } });
+    if (editedFoods().some(food => !String(food.name).trim())) throw new Error('請填寫每一項食物名稱');
+    await callApi('save_meal', { memberId: state.active.member_id, meal: { date: today(), time: new Date().toTimeString().slice(0, 5), meal_type: state.manualEntry ? $('#manualMealType').value : $('#mealType').value, foods: editedFoods() } });
     state.files = [];
     state.analysis = null;
     $('#previews').innerHTML = '';
@@ -255,10 +291,16 @@ $('#newMemberBtn').onclick = () => openMemberDialog();
 $('#editMemberBtn').onclick = () => openMemberDialog(state.profile);
 $('#switchBtn').onclick = () => { $('#homeView').classList.add('hidden'); $('#membersView').classList.remove('hidden'); state.active = null; };
 $('#cameraBtn').onclick = openPhotoDialog;
+$('#manualBtn').onclick = openManualEntry;
 $('#photos').onchange = event => { addFiles(event.target.files); event.target.value = ''; };
 $('#clearPhotos').onclick = () => { state.files = []; renderPreviews(); };
 $('#analyzeBtn').onclick = analyzePhotos;
 $('#saveMealBtn').onclick = saveMeal;
+$('#addManualFoodBtn').onclick = () => {
+  state.analysis.foods = editedFoods();
+  state.analysis.foods.push(emptyManualFood());
+  renderFoodEditor();
+};
 $('#adviceBtn').onclick = showAdvice;
 $('#weeklyBtn').onclick = showWeekly;
 $('#logBtn').onclick = openDailyLog;
