@@ -1,20 +1,22 @@
 // ==================== SRS 階段設定 ====================
 const SRS_STAGES = [
-  { stage: 0, label: '🆕 新字',   days: 3  },
-  { stage: 1, label: '📖 學習中', days: 7  },
-  { stage: 2, label: '✅ 已掌握', days: 30 },
-  { stage: 3, label: '🌟 熟練',   days: null },
+  { stage: 0, label: '🆕 新字',   days: 0  },
+  { stage: 1, label: '📖 學習中', days: 1  },
+  { stage: 2, label: '📖 學習中', days: 3  },
+  { stage: 3, label: '✅ 已掌握', days: 7  },
+  { stage: 4, label: '✅ 已掌握', days: 30 },
+  { stage: 5, label: '🌟 熟練',   days: null },
 ];
 
 function getSrsLabel(stage) { return (SRS_STAGES[stage] || SRS_STAGES[0]).label; }
 function getSrsClass(stage) {
-  if (stage >= 3) return 'streak-great';
+  if (stage >= 5) return 'streak-great';
   if (stage >= 1) return 'streak-good';
   return 'streak-new';
 }
 function calcNextReview(stage, correct) {
-  if (!correct) return { stage: 0, nextReview: Date.now() + 3 * 86400000 };
-  const next = Math.min(stage + 1, 3);
+  if (!correct) return { stage: 0, nextReview: Date.now() + 86400000 };
+  const next = Math.min(stage + 1, 5);
   const days = SRS_STAGES[next] ? SRS_STAGES[next].days : null;
   const nextReview = days ? Date.now() + days * 86400000 : Date.now() + 9999 * 86400000;
   return { stage: next, nextReview };
@@ -33,10 +35,10 @@ let state = {
   totalQuizzes: 0,
   totalCorrect: 0,
   wrongWords: { en: {}, ja: {} },
+  hiddenWords: { en: [], ja: [] },
   settings: {
     dailyReviewCount: 5,
     scriptUrl: 'https://script.google.com/macros/s/AKfycbzHmM7yXQskkWHKXF0B-obIJrMAhuKCdKaSDZnhjZUOogYykrlJSq762CeD5YlQt560/exec',
-    secret: '5566',
   }
 };
 
@@ -115,8 +117,11 @@ function load(userName) {
       if (state.wrongWords && !state.wrongWords.en) {
         state.wrongWords = { en: state.wrongWords, ja: {} };
       }
-      state.words.forEach(w => { if (w.stage === undefined) w.stage = Math.min(w.streak || 0, 3); });
-      state.jaWords.forEach(w => { if (w.stage === undefined) w.stage = Math.min(w.streak || 0, 3); });
+      if (!state.hiddenWords) state.hiddenWords = { en: [], ja: [] };
+      if (!Array.isArray(state.hiddenWords.en)) state.hiddenWords.en = [];
+      if (!Array.isArray(state.hiddenWords.ja)) state.hiddenWords.ja = [];
+      state.words.forEach(w => { if (w.stage === undefined) w.stage = Math.min(w.streak || 0, 5); });
+      state.jaWords.forEach(w => { if (w.stage === undefined) w.stage = Math.min(w.streak || 0, 5); });
       state.settings = { ...state.settings, ...loaded.settings };
     } else {
       state = {
@@ -125,6 +130,7 @@ function load(userName) {
         enXp: 0, jaXp: 0, xp: 0,
         totalQuizzes: 0, totalCorrect: 0,
         wrongWords: { en: {}, ja: {} },
+        hiddenWords: { en: [], ja: [] },
         settings: state.settings,
       };
     }
@@ -165,8 +171,8 @@ function renderUserSelect() {
       <div class="user-list">
         ${users.map(u => `
           <button class="user-btn" onclick="loginUser('${esc(u.name)}')">
-            <span class="user-emoji">${u.emoji}</span>
-            <span class="user-name">${u.name}</span>
+            <span class="user-emoji">${html(u.emoji)}</span>
+            <span class="user-name">${html(u.name)}</span>
           </button>`).join('')}
         <button class="user-btn user-add-btn" onclick="showAddUser()">
           <span class="user-emoji">➕</span>
@@ -206,6 +212,7 @@ function selectUserEmoji(btn, emoji) {
 function createUser() {
   const name = document.getElementById('newUserName').value.trim();
   if (!name) { alert('請輸入名字'); return; }
+  if (name.length > 30 || /[\\/?*\[\]:]/.test(name)) { alert('名字最多 30 個字，且不能包含 \\ / ? * [ ] :'); return; }
   const users = getAllUsers();
   if (users.find(u => u.name === name)) { alert('這個名字已存在'); return; }
   users.push({ name, emoji: _selectedUserEmoji });
@@ -220,12 +227,6 @@ async function sheetsAdd(lang, wordObj) {
   catch(e) { console.warn('Sheets 寫入失敗:', e.message); }
 }
 
-async function sheetsDelete(lang, word) {
-  if (!state.currentUser) return;
-  try { await callScript({ type: 'sheets_delete', user: state.currentUser, lang, word }); }
-  catch(e) { console.warn('Sheets 刪除失敗:', e.message); }
-}
-
 async function sheetsUpdate(lang, word, stage, nextReview) {
   if (!state.currentUser) return;
   try { await callScript({ type: 'sheets_update', user: state.currentUser, lang, word, stage, nextReview }); }
@@ -237,8 +238,16 @@ async function refreshFromSheets() {
   showToast('🔄 從雲端讀取...');
   try {
     const data = await callScript({ type: 'sheets_read', user: state.currentUser });
-    state.words = data.words || [];
-    state.jaWords = data.jaWords || [];
+    (data.words || []).forEach(w => {
+      if ((state.hiddenWords.en || []).includes(w.en.toLowerCase())) return;
+      const local = state.words.find(x => x.en.toLowerCase() === w.en.toLowerCase());
+      if (!local) state.words.push(w);
+    });
+    (data.jaWords || []).forEach(w => {
+      if ((state.hiddenWords.ja || []).includes(w.word)) return;
+      const local = state.jaWords.find(x => x.word === w.word);
+      if (!local) state.jaWords.push(w);
+    });
     save();
     renderWordList();
     updateHome();
@@ -306,12 +315,16 @@ function getDueWords() {
   const now = Date.now();
   const words = state.lang === 'ja' ? state.jaWords : state.words;
   return words
-    .filter(w => (w.stage || 0) < 3 && w.nextReview <= now)
+    .filter(w => (w.stage || 0) < 5 && w.nextReview <= now)
     .sort((a, b) => a.nextReview - b.nextReview)
     .slice(0, state.settings.dailyReviewCount || 5);
 }
 
-function esc(s) { return (s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+function html(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
+function jsArg(s) { return html(JSON.stringify(String(s ?? ''))); }
+function esc(s) { return html(String(s ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'")); }
 
 function showToast(msg, duration) {
   duration = duration || 2500;
@@ -464,9 +477,9 @@ function renderWordList() {
   if (wordListSort === 'group') {
     const groups = [
       { key: 'new',   label: '🆕 新字',   filter: w => (w.stage||0) === 0 },
-      { key: 'good',  label: '📖 學習中',  filter: w => (w.stage||0) === 1 },
-      { key: 'great', label: '✅ 已掌握',  filter: w => (w.stage||0) === 2 },
-      { key: 'done',  label: '🌟 熟練',    filter: w => (w.stage||0) >= 3 },
+      { key: 'good',  label: '📖 學習中',  filter: w => (w.stage||0) === 1 || (w.stage||0) === 2 },
+      { key: 'great', label: '✅ 已掌握',  filter: w => (w.stage||0) === 3 || (w.stage||0) === 4 },
+      { key: 'done',  label: '🌟 熟練',    filter: w => (w.stage||0) >= 5 },
     ];
     groups.forEach(g => {
       const gWords = words.filter(g.filter);
@@ -496,8 +509,8 @@ function renderWordItem(w, i, isJa) {
       <div class="word-item-top">
         <div class="word-item-icon">${icons[i % icons.length]}</div>
         <div class="word-info">
-          <div class="word-en">${w.word} <span style="font-size:13px;color:#90A4AE">${w.reading||''}</span> ${w.pos ? `<span style="font-size:12px;color:#90A4AE;font-weight:600">${w.pos}</span>` : ''}</div>
-          <div class="word-zh">${w.zh}</div>
+          <div class="word-en">${html(w.word)} <span style="font-size:13px;color:#90A4AE">${html(w.reading||'')}</span> ${w.pos ? `<span style="font-size:12px;color:#90A4AE;font-weight:600">${html(w.pos)}</span>` : ''}</div>
+          <div class="word-zh">${html(w.zh)}</div>
         </div>
         <div class="word-meta">
           <span class="word-streak ${sc}">${sl}</span>
@@ -505,7 +518,7 @@ function renderWordItem(w, i, isJa) {
         </div>
         <button class="delete-btn" onclick="deleteJaWord(${idx})">🗑</button>
       </div>
-      ${w.sentence ? `<div class="word-sentence-full">${w.sentence}<button class="speak-btn" style="width:26px;height:26px;font-size:12px;flex-shrink:0" onclick="speak('${esc(w.sentence)}','ja-JP')">🔊</button></div>` : ''}
+      ${w.sentence ? `<div class="word-sentence-full">${html(w.sentence)}<button class="speak-btn" style="width:26px;height:26px;font-size:12px;flex-shrink:0" onclick="speak('${esc(w.sentence)}','ja-JP')">🔊</button></div>` : ''}
     </div>`;
   }
   const idx = state.words.indexOf(w);
@@ -513,8 +526,8 @@ function renderWordItem(w, i, isJa) {
     <div class="word-item-top">
       <div class="word-item-icon">${icons[i % icons.length]}</div>
       <div class="word-info">
-        <div class="word-en">${w.en} ${w.pos ? `<span style="font-size:12px;color:#90A4AE;font-weight:600">${w.pos}</span>` : ''}</div>
-        <div class="word-zh">${w.zh}</div>
+        <div class="word-en">${html(w.en)} ${w.pos ? `<span style="font-size:12px;color:#90A4AE;font-weight:600">${html(w.pos)}</span>` : ''}</div>
+        <div class="word-zh">${html(w.zh)}</div>
       </div>
       <div class="word-meta">
         <span class="word-streak ${sc}">${sl}</span>
@@ -522,7 +535,7 @@ function renderWordItem(w, i, isJa) {
       </div>
       <button class="delete-btn" onclick="deleteWord(${idx})">🗑</button>
     </div>
-    ${w.sentence ? `<div class="word-sentence-full">${w.sentence}<button class="speak-btn" style="width:26px;height:26px;font-size:12px;flex-shrink:0" onclick="speak('${esc(w.sentence)}')">🔊</button></div>` : ''}
+    ${w.sentence ? `<div class="word-sentence-full">${html(w.sentence)}<button class="speak-btn" style="width:26px;height:26px;font-size:12px;flex-shrink:0" onclick="speak('${esc(w.sentence)}')">🔊</button></div>` : ''}
   </div>`;
 }
 
@@ -539,7 +552,7 @@ function renderWrong() {
   entries.sort((a,b) => b[1]-a[1]);
   container.innerHTML = entries.map(([key, count]) => {
     const w = isJa ? state.jaWords.find(x => x.word === key) : state.words.find(x => x.en === key);
-    return `<div class="wrong-item"><div class="wrong-en">${key}</div>${w ? `<div class="wrong-zh">${w.zh}</div>` : ''}<div class="wrong-count">答錯 ${count} 次</div></div>`;
+    return `<div class="wrong-item"><div class="wrong-en">${html(key)}</div>${w ? `<div class="wrong-zh">${html(w.zh)}</div>` : ''}<div class="wrong-count">答錯 ${Number(count) || 0} 次</div></div>`;
   }).join('');
 }
 
@@ -562,7 +575,7 @@ async function autoLookup() {
     document.getElementById('addZh').value = r.zh || '';
     document.getElementById('addSentence').value = r.sentence || '';
     status.innerHTML = '✅ 已自動填入，可修改後再加入'; status.style.color = '#388E3C';
-  } catch(e) { status.innerHTML = '❌ ' + e.message; status.style.color = '#EF5350'; }
+  } catch(e) { status.textContent = '❌ ' + e.message; status.style.color = '#EF5350'; }
   btn.disabled = false;
 }
 
@@ -582,7 +595,7 @@ async function autoLookupJa() {
     document.getElementById('addZhJa').value = r.zh || '';
     document.getElementById('addSentenceJa').value = r.sentence || '';
     status.innerHTML = '✅ 已自動填入，可修改後再加入'; status.style.color = '#388E3C';
-  } catch(e) { status.innerHTML = '❌ ' + e.message; status.style.color = '#EF5350'; }
+  } catch(e) { status.textContent = '❌ ' + e.message; status.style.color = '#EF5350'; }
   btn.disabled = false;
 }
 
@@ -594,6 +607,7 @@ function addWord() {
   if (!en || !zh) { showToast('⚠️ 請填入英文和中文'); return; }
   if (state.words.find(x => x.en.toLowerCase() === en.toLowerCase())) { showToast(`⚠️ 單字庫已有「${en}」`); return; }
   const wordObj = { en, zh, pos, sentence, stage: 0, streak: 0, nextReview: Date.now() };
+  state.hiddenWords.en = state.hiddenWords.en.filter(x => x !== en.toLowerCase());
   state.words.push(wordObj);
   save();
   sheetsAdd('en', wordObj);
@@ -612,6 +626,7 @@ function addJaWord() {
   if (!word || !zh) { showToast('⚠️ 請填入日文和中文'); return; }
   if (state.jaWords.find(x => x.word === word)) { showToast(`⚠️ 單字庫已有「${word}」`); return; }
   const wordObj = { word, reading, zh, pos, sentence, stage: 0, streak: 0, nextReview: Date.now() };
+  state.hiddenWords.ja = state.hiddenWords.ja.filter(x => x !== word);
   state.jaWords.push(wordObj);
   save();
   sheetsAdd('ja', wordObj);
@@ -624,18 +639,18 @@ function addJaWord() {
 function deleteWord(idx) {
   if (confirm('確定要刪除這個單字嗎？')) {
     const w = state.words[idx];
+    if (!state.hiddenWords.en.includes(w.en.toLowerCase())) state.hiddenWords.en.push(w.en.toLowerCase());
     state.words.splice(idx, 1); save();
-    sheetsDelete('en', w.en);
-    renderWordList(); showToast('🗑 已刪除');
+    renderWordList(); showToast('已從本機刪除，雲端原始資料不受影響', 4000);
   }
 }
 
 function deleteJaWord(idx) {
   if (confirm('確定要刪除這個單字嗎？')) {
     const w = state.jaWords[idx];
+    if (!state.hiddenWords.ja.includes(w.word)) state.hiddenWords.ja.push(w.word);
     state.jaWords.splice(idx, 1); save();
-    sheetsDelete('ja', w.word);
-    renderWordList(); showToast('🗑 已刪除');
+    renderWordList(); showToast('已從本機刪除，雲端原始資料不受影響', 4000);
   }
 }
 
@@ -717,12 +732,6 @@ async function testTTS() {
   }
 }
 
-function stopGeminiTTS() {
-  _ttsPlaying = false;
-  if (_ttsAudio) { _ttsAudio.pause(); _ttsAudio.currentTime = 0; _ttsAudio = null; }
-  window.speechSynthesis && window.speechSynthesis.cancel();
-}
-
 // ==================== FILL-IN-BLANK ====================
 function makeBlank(word) {
   const len = word.length;
@@ -797,7 +806,7 @@ function renderQuestion() {
   const html = `<div class="question-type-label">填空測驗</div>
     <button class="speak-big-btn" id="speakBtn" onclick="speakQuestion()">🔊</button>
     <div class="question-hint">聽發音，寫出完整單字（提示如下）</div>
-    <div class="question-zh">${q.word.zh}</div>
+    <div class="question-zh">${html(q.word.zh)}</div>
     <div class="blank-display">${displayHtml}</div>
     <input class="answer-input" id="answerInput" type="text" placeholder="輸入完整單字..."
       autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false"
@@ -913,21 +922,16 @@ function renderFlashcard() {
 
   document.getElementById('questionCard').innerHTML = `
     <div class="question-type-label">📇 單字複習</div>
-    <div class="flashcard" onclick="flipCard()">
+    <div class="flashcard">
       <div class="flashcard-front ${flipped ? 'hidden' : ''}">
-        <div class="flashcard-word">${wordKey}</div>
-        ${w.pos ? `<div class="flashcard-pos">${isJa ? (w.reading || '') : w.pos}</div>` : ''}
-        <div style="margin:24px 0 24px">
-          <button class="speak-btn" style="margin:0 auto;display:flex" onclick="event.stopPropagation();speak('${esc(wordKey)}','${speakLang}')">🔊</button>
-        </div>
-        <div class="flashcard-hint">點卡片查看中文</div>
+        <div class="flashcard-word">${html(wordKey)}</div>
+        ${w.pos ? `<div class="flashcard-pos">${html(isJa ? (w.reading || '') : w.pos)}</div>` : ''}
+        <button class="review-speak-btn" onclick="speak('${esc(wordKey)}','${speakLang}')">🔊 聽發音</button>
       </div>
       <div class="flashcard-back ${flipped ? '' : 'hidden'}">
-        <div class="flashcard-zh">${w.zh}</div>
-        ${w.sentence ? `<div class="flashcard-sentence">${w.sentence}</div>` : ''}
-        <div style="margin:24px 0 8px">
-          <button class="speak-btn" style="margin:0 auto;display:flex" onclick="event.stopPropagation();speak('${esc(wordKey)}','${speakLang}')">🔊</button>
-        </div>
+        <div class="flashcard-zh">${html(w.zh)}</div>
+        ${w.sentence ? `<div class="flashcard-sentence">${html(w.sentence)}</div>` : ''}
+        <button class="review-speak-btn" onclick="speak('${esc(wordKey)}','${speakLang}')">🔊 再聽一次</button>
       </div>
     </div>
     <div class="flashcard-btns ${flipped ? '' : 'pre-flip'}">
@@ -935,7 +939,7 @@ function renderFlashcard() {
         <button class="flashcard-btn forgot" onclick="reviewAnswer(false)">😅 忘了</button>
         <button class="flashcard-btn remembered" onclick="reviewAnswer(true)">😊 記得</button>
       ` : `
-        <button class="flashcard-btn skip" onclick="reviewAnswer(true)">⏭ 跳過（記得）</button>
+        <button class="flashcard-btn reveal" onclick="flipCard()">👀 看解答</button>
       `}
     </div>`;
 }
@@ -966,6 +970,41 @@ function reviewAnswer(remembered) {
 
 // ==================== STORY ====================
 let storyState = { level: 'L0.5', genre: 'Hero Quest', sentences: [], stepIdx: 0, currentTitle: '', currentGenre: '' };
+
+function selectStoryWords(allWords, level, isJa) {
+  if (!allWords.length) return [];
+  const now = Date.now();
+  const wrongMap = isJa ? (state.wrongWords.ja || {}) : (state.wrongWords.en || {});
+  const dueCount = allWords.filter(w => Number(w.nextReview || 0) <= now).length;
+  let target = 10;
+  if (!isJa && level === 'L0.5') target = dueCount >= 4 ? 4 : 3;
+  if (!isJa && level === 'L1') target = Math.min(8, Math.max(5, dueCount));
+  target = Math.min(target, allWords.length);
+  return [...allWords].map(w => {
+    const key = isJa ? w.word : w.en;
+    const overdueDays = Math.max(0, (now - Number(w.nextReview || 0)) / 86400000);
+    const recentlyUsed = w.lastStoryUsed && now - w.lastStoryUsed < 7 * 86400000;
+    const score = Math.min(overdueDays, 30) * 4 + (wrongMap[key] || 0) * 12 + (5 - Math.min(w.stage || 0, 5)) * 15 - (recentlyUsed ? 35 : 0) - (w.storyUseCount || 0) * 0.5 + Math.random() * 8;
+    return { w, score };
+  }).sort((a, b) => b.score - a.score).slice(0, target).map(x => x.w);
+}
+
+function validateBeginnerStory(data, level, mustWords) {
+  if (level !== 'L0.5' && level !== 'L1') return [];
+  const text = (data.sentences || []).join(' ');
+  const problems = [];
+  const forbidden = /\b(was|were|went|saw|did|had|came|made|took|gave|got|said|told|found|thought|knew|ran|ate|drank|slept|wrote|read|played|liked|wanted|walked|looked|will|would|could|should)\b/i;
+  if (forbidden.test(text) || /\b(am|is|are)\s+\w+ing\b/i.test(text)) problems.push('使用了非簡單現在式');
+  const lower = text.toLowerCase();
+  const missing = mustWords.filter(w => !lower.includes(String(w).toLowerCase()));
+  if (missing.length) problems.push(`缺少複習單字：${missing.join(', ')}`);
+  if (level === 'L0.5') {
+    const sentences = data.sentences || [];
+    if (sentences.length < 4 || sentences.length > 6) problems.push('句數不是 4–6 句');
+    if (sentences.some(s => s.replace(/[^A-Za-z' -]/g, '').trim().split(/\s+/).filter(Boolean).length > 8)) problems.push('有句子超過 8 個英文單字');
+  }
+  return problems;
+}
 
 const GENRES = {
   'L0.5': [
@@ -1053,27 +1092,24 @@ async function generateStory() {
   const isJa = state.lang === 'ja';
   try {
     const allWords = isJa ? state.jaWords : state.words;
-    const stage01 = allWords.filter(w => (w.stage||0) <= 1).sort(() => Math.random() - 0.5);
-    const mustReview = stage01.slice(0, 10);
-    const needed = Math.max(0, 10 - mustReview.length);
-    const shouldReview = needed > 0
-      ? allWords.filter(w => (w.stage||0) === 2).sort(() => Math.random() - 0.5).slice(0, needed)
-      : [];
-    const optimizedWords = [...mustReview, ...shouldReview];
+    const optimizedWords = selectStoryWords(allWords, storyState.level, isJa);
+    const mustReview = optimizedWords;
     const learnedWords = isJa ? optimizedWords.map(w => w.word) : optimizedWords.map(w => w.en);
     const mustWords = isJa ? mustReview.map(w => w.word) : mustReview.map(w => w.en);
-    // 全部單字庫作為黑名單（Key Vocabulary 不能選這些）
-    const allKnownWords = isJa ? allWords.map(w => w.word) : allWords.map(w => w.en);
-
     showToast(`📤 傳給AI：必用 ${mustWords.length} 個`, 3000);
 
     const data = await callScript({
       type: isJa ? 'ja_story' : 'story',
       level: storyState.level,
       learned_words: learnedWords,
-      must_words: mustWords,
-      all_known_words: allKnownWords
+      must_words: mustWords
     });
+
+    const storyProblems = isJa ? [] : validateBeginnerStory(data, storyState.level, mustWords);
+    if (storyProblems.length) throw new Error('故事難度不符合：' + storyProblems.join('；') + '。請重新生成。');
+    const usedAt = Date.now();
+    optimizedWords.forEach(w => { w.lastStoryUsed = usedAt; w.storyUseCount = (w.storyUseCount || 0) + 1; });
+    save();
 
     storyState.sentences = data.sentences || [];
     storyState.stepIdx = 0;
@@ -1088,7 +1124,7 @@ async function generateStory() {
     document.getElementById('storyTitle').textContent = data.title || '故事';
     document.getElementById('storyMeta').innerHTML = `
       <span class="story-badge">${levelNames[storyState.level]||storyState.level}</span>
-      <span class="story-badge">⏱ ${data.reading_time||''}</span>`;
+      <span class="story-badge">⏱ ${html(data.reading_time||'')}</span>`;
 
     // 顯示傳給 AI 的單字
     const debugArea = document.getElementById('storyDebugWords');
@@ -1096,17 +1132,17 @@ async function generateStory() {
       const extraWords = learnedWords.filter(w => !mustWords.includes(w));
       debugArea.innerHTML = mustWords.length > 0 ? `
         <div style="background:#FFF9C4;border-radius:12px;padding:10px 14px;font-size:12px;color:#5D4037;margin-bottom:8px;line-height:1.8">
-          <strong>📌 必用單字：</strong>${mustWords.join(', ')}
-          ${extraWords.length > 0 ? `<br><strong>➕ 補充單字：</strong>${extraWords.join(', ')}` : ''}
+          <strong>📌 必用單字：</strong>${mustWords.map(html).join(', ')}
+          ${extraWords.length > 0 ? `<br><strong>➕ 補充單字：</strong>${extraWords.map(html).join(', ')}` : ''}
         </div>` : '';
     }
 
     document.getElementById('storyBody').innerHTML = (data.sentences||[])
-      .map((s,i) => `<span class="story-sent" id="story-sent-${i}" onclick="speakSentence(${i})">${s} </span>`).join('');
+      .map((s,i) => `<span class="story-sent" id="story-sent-${i}" onclick="speakSentence(${i})">${html(s)} </span>`).join('');
 
     const zhArea = document.getElementById('storyZhArea');
     if (data.story_zh) {
-      const zhParagraphs = data.story_zh.split('\n\n').map(p => `<p>${p}</p>`).join('');
+      const zhParagraphs = data.story_zh.split('\n\n').map(p => `<p>${html(p)}</p>`).join('');
       zhArea.innerHTML = `<button class="story-zh-toggle" onclick="toggleStoryZh(this)">🇹🇼 顯示中文翻譯</button><div class="story-zh-content" style="display:none">${zhParagraphs}</div>`;
     } else {
       zhArea.innerHTML = '';
@@ -1115,7 +1151,7 @@ async function generateStory() {
     if (data.cultural_note) {
       const cn = document.getElementById('culturalNote');
       cn.style.display = 'block';
-      cn.innerHTML = `<strong>📌 文化備註</strong>${data.cultural_note}`;
+      cn.innerHTML = `<strong>📌 文化備註</strong>${html(data.cultural_note)}`;
     } else {
       document.getElementById('culturalNote').style.display = 'none';
     }
@@ -1125,16 +1161,16 @@ async function generateStory() {
     window._storyVocabChecked = vocab.map(() => true);
     const speakLang = isJa ? 'ja-JP' : 'en-US';
     document.getElementById('vocabList').innerHTML = vocab.map((v, i) => {
-      const wordDisplay = isJa ? `${v.word||v.en} <span style="font-size:12px;color:#90A4AE">${v.reading||''}</span>` : (v.en||'');
+      const wordDisplay = isJa ? `${html(v.word||v.en)} <span style="font-size:12px;color:#90A4AE">${html(v.reading||'')}</span>` : html(v.en||'');
       const speakWord = isJa ? (v.word||v.en||'') : (v.en||'');
       return `<div class="vocab-item">
         <span class="vocab-add-check" id="vchk${i}" onclick="toggleVocab(${i})">${window._storyVocabChecked[i]?'☑️':'⬜'}</span>
         <div>
-          <div class="vocab-en">${wordDisplay} <span style="font-size:12px;color:#90A4AE">${v.pos||''}</span>
+          <div class="vocab-en">${wordDisplay} <span style="font-size:12px;color:#90A4AE">${html(v.pos||'')}</span>
             <button class="speak-btn" style="width:26px;height:26px;font-size:12px;margin-left:4px" onclick="speak('${esc(speakWord)}','${speakLang}')">🔊</button>
           </div>
-          <div class="vocab-zh">${v.zh||''}</div>
-          <div class="vocab-sent">${v.sentence||''}</div>
+          <div class="vocab-zh">${html(v.zh||'')}</div>
+          <div class="vocab-sent">${html(v.sentence||'')}</div>
         </div>
       </div>`;
     }).join('');
@@ -1163,7 +1199,7 @@ async function generateStoryImage() {
       throw new Error('無法取得圖片');
     }
   } catch(e) {
-    imgArea.innerHTML = `<div class="story-img-error">🎨 插圖生成失敗<br><small>${e.message}</small><br><button class="story-img-btn" style="margin-top:10px" onclick="generateStoryImage()">重試</button></div>`;
+    imgArea.innerHTML = `<div class="story-img-error">🎨 插圖生成失敗<br><small>${html(e.message)}</small><br><button class="story-img-btn" style="margin-top:10px" onclick="generateStoryImage()">重試</button></div>`;
   }
 }
 
@@ -1525,7 +1561,7 @@ function renderSettings() {
     <div class="settings-card">
       <h3>👤 用戶</h3>
       <div class="settings-row">
-        <div class="settings-label">目前：${state.currentUser || '未登入'}</div>
+        <div class="settings-label">目前：${html(state.currentUser || '未登入')}</div>
         <button onclick="showUserSelect()" style="background:#E3F2FD;color:var(--sky-dark);border:none;border-radius:10px;padding:8px 14px;font-family:'Nunito',sans-serif;font-size:13px;font-weight:800;cursor:pointer">切換用戶</button>
       </div>
     </div>
@@ -1546,11 +1582,7 @@ function renderSettings() {
       <h3>🔗 API 設定</h3>
       <div class="input-group">
         <label>Script 網址</label>
-        <input type="text" id="settingScriptUrl" value="${s.scriptUrl}" style="-webkit-user-select:auto;user-select:auto" placeholder="https://script.google.com/...">
-      </div>
-      <div class="input-group">
-        <label>密碼</label>
-        <input type="text" id="settingSecret" value="${s.secret}" style="-webkit-user-select:auto;user-select:auto" placeholder="5566">
+        <input type="text" id="settingScriptUrl" value="${html(s.scriptUrl)}" style="-webkit-user-select:auto;user-select:auto" placeholder="https://script.google.com/...">
       </div>
     </div>
     <button class="submit-btn" onclick="saveSettings()" style="margin-bottom:14px">💾 儲存設定</button>
@@ -1563,7 +1595,6 @@ function renderSettings() {
 function saveSettings() {
   state.settings.dailyReviewCount = parseInt(document.getElementById('settingReviewCount').value) || 5;
   state.settings.scriptUrl = document.getElementById('settingScriptUrl').value.trim();
-  state.settings.secret = document.getElementById('settingSecret').value.trim();
   save();
   showToast('✅ 設定已儲存！');
   updateHome();
