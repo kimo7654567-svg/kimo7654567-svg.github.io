@@ -74,9 +74,10 @@ async function loadMeals() {
 function openMemberDialog(profile = null) {
   const form = $('#memberForm');
   form.reset();
-  form.member_id.value = profile ? profile.member_id : '';
+  form.elements.namedItem('member_id').value = profile ? profile.member_id : '';
+  $('#memberFormStatus').textContent = '';
   if (profile) {
-    ['name', 'birthday', 'sex', 'height_cm', 'weight_kg', 'activity_level', 'goal', 'allergy'].forEach(key => {
+    ['name', 'birthday', 'sex', 'height_cm', 'weight_kg', 'activity_level', 'usual_daily_steps', 'goal', 'allergy'].forEach(key => {
       if (form.elements[key]) form.elements[key].value = profile[key] ?? '';
     });
     form.querySelector(`[name=is_child][value="${Boolean(profile.is_child)}"]`).checked = true;
@@ -97,16 +98,24 @@ function toggleChildFields() {
 
 $('#memberForm').onsubmit = async event => {
   event.preventDefault();
+  const submitButton = $('#memberSubmitBtn');
+  const status = $('#memberFormStatus');
   const values = Object.fromEntries(new FormData(event.currentTarget));
   const profile = {
     name: values.name, birthday: values.birthday, sex: values.sex,
     height_cm: Number(values.height_cm), weight_kg: Number(values.weight_kg),
     activity_level: values.activity_level, is_child: values.is_child === 'true',
+    usual_daily_steps: values.usual_daily_steps ? Number(values.usual_daily_steps) : null,
     goal: values.is_child === 'true' ? null : values.goal,
     allergy: values.allergy || '', avatar_id: values.avatar_id,
   };
+  const memberId = values.member_id;
   try {
-    const memberId = values.member_id;
+    submitButton.disabled = true;
+    submitButton.textContent = memberId ? '儲存中…' : '建立中…';
+    status.textContent = memberId
+      ? '正在儲存個人資料…'
+      : '正在建立個人資料與專屬 Google Sheet，第一次可能需要 10～20 秒，請稍候。';
     const created = memberId
       ? await callApi('update_profile', { memberId, profile })
       : await callApi('create_member', { profile });
@@ -114,7 +123,13 @@ $('#memberForm').onsubmit = async event => {
     await loadMembers();
     await selectMember(created.member_id);
     toast(memberId ? '個人資料已更新' : '家庭成員已建立');
-  } catch (error) { toast(error.message); }
+  } catch (error) {
+    status.textContent = `儲存失敗：${error.message}`;
+    toast(error.message);
+  } finally {
+    submitButton.disabled = false;
+    submitButton.textContent = '儲存';
+  }
 };
 
 function openPhotoDialog() {

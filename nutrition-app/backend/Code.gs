@@ -2,7 +2,7 @@
 
 const API_VERSION = '1.0.0';
 const MEMBER_HEADERS = ['member_id', 'name', 'is_child', 'avatar_id', 'spreadsheet_id', 'created_at'];
-const PROFILE_HEADERS = ['member_id', 'name', 'birthday', 'sex', 'height_cm', 'weight_kg', 'activity_level', 'goal', 'is_child', 'allergy', 'avatar_id', 'created_at', 'updated_at'];
+const PROFILE_HEADERS = ['member_id', 'name', 'birthday', 'sex', 'height_cm', 'weight_kg', 'activity_level', 'usual_daily_steps', 'goal', 'is_child', 'allergy', 'avatar_id', 'created_at', 'updated_at'];
 const MEAL_HEADERS = ['record_id', 'food_item_id', 'date', 'time', 'meal_type', 'food_name', 'quantity', 'estimated_weight_g', 'calories', 'protein_g', 'fat_g', 'carbohydrate_g', 'fiber_g', 'sodium_mg', 'calcium_mg', 'iron_mg', 'zinc_mg', 'vitamin_a_ug', 'vitamin_c_mg', 'vitamin_d_ug', 'omega3_mg', 'vegetable_serving', 'fruit_serving', 'dairy_serving', 'confidence', 'note', 'created_at'];
 const DAILY_LOG_HEADERS = ['date', 'water_ml', 'weight_kg', 'updated_at'];
 const DAILY_SUMMARY_HEADERS = ['date', 'calories', 'protein_g', 'fat_g', 'carbohydrate_g', 'fiber_g', 'sodium_mg', 'calcium_mg', 'iron_mg', 'zinc_mg', 'vitamin_a_ug', 'vitamin_c_mg', 'vitamin_d_ug', 'omega3_mg', 'vegetable_serving', 'fruit_serving', 'dairy_serving', 'water_ml', 'feedback', 'updated_at'];
@@ -412,6 +412,7 @@ function validateProfile(profile) {
   requireText(profile.avatar_id, '人像', 50);
   numberInRange(profile.height_cm, 30, 250, '身高'); numberInRange(profile.weight_kg, 1, 500, '體重');
   if (!toBoolean(profile.is_child) && !profile.goal) throw new Error('成人需要選擇目標');
+  if (profile.usual_daily_steps != null && profile.usual_daily_steps !== '') numberInRange(profile.usual_daily_steps, 0, 100000, '每日步數');
   if (String(profile.allergy || '').length > 500) throw new Error('過敏資料過長');
 }
 function validateFood(food) {
@@ -424,7 +425,9 @@ function normalizeProfile(memberId, profile, createdAt, updatedAt) {
   return {
     member_id: memberId, name: String(profile.name).trim(), birthday: profile.birthday,
     sex: profile.sex, height_cm: Number(profile.height_cm), weight_kg: Number(profile.weight_kg),
-    activity_level: profile.activity_level, goal: toBoolean(profile.is_child) ? '' : profile.goal,
+    activity_level: profile.activity_level,
+    usual_daily_steps: profile.usual_daily_steps == null || profile.usual_daily_steps === '' ? '' : Number(profile.usual_daily_steps),
+    goal: toBoolean(profile.is_child) ? '' : profile.goal,
     is_child: toBoolean(profile.is_child), allergy: String(profile.allergy || '').trim(),
     avatar_id: profile.avatar_id, created_at: createdAt, updated_at: updatedAt,
   };
