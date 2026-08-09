@@ -1,11 +1,11 @@
 /** 日日好食 Cloud API — Google Apps Script */
 
 const API_VERSION = '1.0.0';
-const MEMBER_HEADERS = ['member_id', 'name', 'is_child', 'avatar_id', 'spreadsheet_id', 'created_at'];
+const MEMBER_HEADERS = ['member_id', 'name', 'is_child', 'avatar_id', 'spreadsheet_id', 'password_salt', 'password_hash', 'auth_version', 'created_at'];
 const PROFILE_HEADERS = ['member_id', 'name', 'birthday', 'sex', 'height_cm', 'weight_kg', 'activity_level', 'usual_daily_steps', 'goal', 'is_child', 'allergy', 'avatar_id', 'created_at', 'updated_at'];
 const MEAL_HEADERS = ['record_id', 'food_item_id', 'date', 'time', 'meal_type', 'food_name', 'quantity', 'estimated_weight_g', 'calories', 'protein_g', 'fat_g', 'carbohydrate_g', 'fiber_g', 'sodium_mg', 'calcium_mg', 'iron_mg', 'zinc_mg', 'vitamin_a_ug', 'vitamin_c_mg', 'vitamin_d_ug', 'omega3_mg', 'vegetable_serving', 'fruit_serving', 'dairy_serving', 'confidence', 'note', 'created_at'];
-const DAILY_LOG_HEADERS = ['date', 'water_ml', 'weight_kg', 'updated_at'];
-const DAILY_SUMMARY_HEADERS = ['date', 'calories', 'protein_g', 'fat_g', 'carbohydrate_g', 'fiber_g', 'sodium_mg', 'calcium_mg', 'iron_mg', 'zinc_mg', 'vitamin_a_ug', 'vitamin_c_mg', 'vitamin_d_ug', 'omega3_mg', 'vegetable_serving', 'fruit_serving', 'dairy_serving', 'water_ml', 'feedback', 'updated_at'];
+const DAILY_LOG_HEADERS = ['date', 'water_ml', 'steps', 'weight_kg', 'updated_at'];
+const DAILY_SUMMARY_HEADERS = ['date', 'calories', 'protein_g', 'fat_g', 'carbohydrate_g', 'fiber_g', 'sodium_mg', 'calcium_mg', 'iron_mg', 'zinc_mg', 'vitamin_a_ug', 'vitamin_c_mg', 'vitamin_d_ug', 'omega3_mg', 'vegetable_serving', 'fruit_serving', 'dairy_serving', 'water_ml', 'steps', 'feedback', 'updated_at'];
 const WEEKLY_SUMMARY_HEADERS = ['week_start', 'week_end', 'recorded_days', 'average_calories', 'average_protein_g', 'average_fiber_g', 'average_sodium_mg', 'average_calcium_mg', 'average_iron_mg', 'average_zinc_mg', 'average_vitamin_a_ug', 'average_vitamin_c_mg', 'average_vitamin_d_ug', 'average_omega3_mg', 'average_vegetable_serving', 'average_fruit_serving', 'average_dairy_serving', 'weight_change_kg', 'feedback', 'updated_at'];
 const NUTRIENT_KEYS = ['calories', 'protein_g', 'fat_g', 'carbohydrate_g', 'fiber_g', 'sodium_mg', 'calcium_mg', 'iron_mg', 'zinc_mg', 'vitamin_a_ug', 'vitamin_c_mg', 'vitamin_d_ug', 'omega3_mg'];
 
@@ -25,16 +25,18 @@ function doPost(e) {
   }
 }
 
-function authorizeRequest(_body) {
-  // Version 1 intentionally has no PIN. Add session/password validation here later.
-  return true;
+function authorizeRequest(body) {
+  if (['health', 'list_members', 'create_member', 'login'].indexOf(body.action) >= 0) return true;
+  verifyAuthToken(body.memberId, body.authToken); return true;
 }
 
 function routeRequest(body) {
   switch (body.action) {
     case 'health': return { version: API_VERSION, geminiConfigured: Boolean(getConfig().geminiKey) };
     case 'list_members': return listMembers();
-    case 'create_member': return createMember(body.profile);
+    case 'create_member': return createMember(body.profile, body.password);
+    case 'login': return loginMember(body.memberId, body.password);
+    case 'delete_account': return deleteAccount(body.memberId, body.password);
     case 'get_profile': return getProfile(body.memberId);
     case 'update_profile': return updateProfile(body.memberId, body.profile);
     case 'analyze_food': return analyzeFood(body.images);
@@ -63,12 +65,13 @@ function getConfig() {
 function listMembers() {
   return rowsAsObjects(getFamilyIndexSheet()).map(row => ({
     member_id: String(row.member_id), name: String(row.name),
-    is_child: toBoolean(row.is_child), avatar_id: String(row.avatar_id),
+    is_child: toBoolean(row.is_child), avatar_id: String(row.avatar_id), needs_password: !row.password_hash,
   }));
 }
 
-function createMember(profile) {
+function createMember(profile, password) {
   validateProfile(profile);
+  validatePassword(password);
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
@@ -78,11 +81,11 @@ function createMember(profile) {
     initializeMemberBook(memberBook);
     const storedProfile = normalizeProfile(memberId, profile, now, now);
     appendObject(memberBook.getSheetByName('Profile'), PROFILE_HEADERS, storedProfile);
-    appendObject(getFamilyIndexSheet(), MEMBER_HEADERS, {
+    const salt = Utilities.getUuid(); appendObject(getFamilyIndexSheet(), MEMBER_HEADERS, {
       member_id: memberId, name: profile.name, is_child: profile.is_child,
-      avatar_id: profile.avatar_id, spreadsheet_id: memberBook.getId(), created_at: now,
+      avatar_id: profile.avatar_id, spreadsheet_id: memberBook.getId(), password_salt: salt, password_hash: hashPassword(password, salt), auth_version: 1, created_at: now,
     });
-    return storedProfile;
+    storedProfile.auth_token = issueAuthToken(memberId, 1); return storedProfile;
   } finally {
     lock.releaseLock();
   }
@@ -128,6 +131,15 @@ function analyzeFood(images) {
   });
   return enforceFoodAnalysis(callGeminiJson(parts, foodAnalysisSchema()), images.length);
 }
+
+function loginMember(memberId, password) { const sheet = getFamilyIndexSheet(); const rows = rowsAsObjects(sheet); const index = rows.findIndex(row => String(row.member_id) === String(memberId)); if (index < 0) throw new Error('找不到家庭成員'); const member = rows[index]; validatePassword(password); if (!member.password_hash) { member.password_salt = Utilities.getUuid(); member.password_hash = hashPassword(password, member.password_salt); member.auth_version = 1; replaceObject(sheet, MEMBER_HEADERS, index + 2, member); } else if (hashPassword(password, member.password_salt) !== String(member.password_hash)) throw new Error('密碼錯誤'); return { member_id: memberId, auth_token: issueAuthToken(memberId, Number(member.auth_version) || 1) }; }
+function deleteAccount(memberId, password) { const sheet = getFamilyIndexSheet(); const rows = rowsAsObjects(sheet); const index = rows.findIndex(row => String(row.member_id) === String(memberId)); if (index < 0) throw new Error('找不到家庭成員'); const member = rows[index]; if (hashPassword(password, member.password_salt) !== String(member.password_hash)) throw new Error('密碼錯誤'); DriveApp.getFileById(String(member.spreadsheet_id)).setTrashed(true); sheet.deleteRow(index + 2); return { member_id: memberId, deleted: true }; }
+function validatePassword(password) { if (String(password || '').length < 6 || String(password).length > 100) throw new Error('密碼需為 6 至 100 個字元'); }
+function hashPassword(password, salt) { return bytesToHex(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(salt) + ':' + String(password), Utilities.Charset.UTF_8)); }
+function bytesToHex(bytes) { return bytes.map(value => ('0' + ((value < 0 ? value + 256 : value).toString(16))).slice(-2)).join(''); }
+function authSecret() { const props = PropertiesService.getScriptProperties(); let value = props.getProperty('AUTH_SECRET'); if (!value) { value = Utilities.getUuid() + Utilities.getUuid(); props.setProperty('AUTH_SECRET', value); } return value; }
+function issueAuthToken(memberId, version) { const payload = memberId + '|' + version + '|' + (Date.now() + 180 * 86400000); const signature = Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(payload, authSecret())).replace(/=+$/, ''); return Utilities.base64EncodeWebSafe(payload).replace(/=+$/, '') + '.' + signature; }
+function verifyAuthToken(memberId, token) { const parts = String(token || '').split('.'); if (parts.length !== 2) throw new Error('請先輸入密碼登入'); const payload = Utilities.newBlob(Utilities.base64DecodeWebSafe(parts[0])).getDataAsString(); const values = payload.split('|'); if (values[0] !== String(memberId) || Number(values[2]) < Date.now()) throw new Error('登入已失效，請重新輸入密碼'); const expected = Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(payload, authSecret())).replace(/=+$/, ''); if (expected !== parts[1]) throw new Error('登入憑證無效'); const member = rowsAsObjects(getFamilyIndexSheet()).find(row => String(row.member_id) === String(memberId)); if (!member || Number(member.auth_version || 1) !== Number(values[1])) throw new Error('登入已失效，請重新輸入密碼'); }
 
 function analyzeManualFood(foods) {
   if (!Array.isArray(foods) || !foods.length || foods.length > 20) throw new Error('請輸入 1 至 20 種食物');
@@ -204,14 +216,15 @@ function getMeals(memberId, date) {
 function saveDailyLog(memberId, log) {
   if (!log) throw new Error('缺少紀錄');
   requireDate(log.date, '日期');
-  if (log.water_ml == null && log.weight_kg == null) throw new Error('請至少填寫飲水或體重');
+  if (log.water_ml == null && log.steps == null) throw new Error('請至少填寫飲水或步數');
   const row = {
     date: log.date,
     water_ml: log.water_ml == null ? '' : numberInRange(log.water_ml, 0, 20000, '飲水'),
+    steps: log.steps == null ? '' : numberInRange(log.steps, 0, 100000, '步數'),
     weight_kg: log.weight_kg == null ? '' : numberInRange(log.weight_kg, 1, 500, '體重'),
     updated_at: new Date().toISOString(),
   };
-  const sheet = getMemberContext(memberId).book.getSheetByName('DailyLog');
+  const sheet = getMemberContext(memberId).book.getSheetByName('DailyLog'); migrateSheetHeaders(sheet, DAILY_LOG_HEADERS);
   upsertByKeys(sheet, DAILY_LOG_HEADERS, row, ['date']);
   return row;
 }
@@ -219,11 +232,13 @@ function saveDailyLog(memberId, log) {
 function getDailySummary(memberId, date) {
   requireDate(date, '日期');
   const context = getMemberContext(memberId);
+  migrateSheetHeaders(context.book.getSheetByName('DailyLog'), DAILY_LOG_HEADERS);
+  migrateSheetHeaders(context.book.getSheetByName('DailySummary'), DAILY_SUMMARY_HEADERS);
   const meals = rowsAsObjects(context.book.getSheetByName('Meals')).filter(row => String(row.date) === date);
   const totals = summarizeMealRows(meals);
   const log = rowsAsObjects(context.book.getSheetByName('DailyLog')).find(row => String(row.date) === date);
   const profile = getProfile(memberId);
-  const result = Object.assign({ date: date, meal_items: meals.length, water_ml: log && log.water_ml !== '' ? Number(log.water_ml) : null }, totals);
+  const result = Object.assign({ date: date, meal_items: meals.length, water_ml: log && log.water_ml !== '' ? Number(log.water_ml) : null, steps: log && log.steps !== '' ? Number(log.steps) : null }, totals);
   result.feedback = localDailyFeedback(result, profile.is_child);
   result.updated_at = new Date().toISOString();
   upsertByKeys(context.book.getSheetByName('DailySummary'), DAILY_SUMMARY_HEADERS, result, ['date']);
@@ -247,11 +262,14 @@ function getWeeklySummary(memberId, weekStart) {
   const average = emptyTotals();
   days.forEach(day => addTotals(average, summarizeMealRows(grouped[day])));
   divideTotals(average, Math.max(days.length, 1));
-  const logs = rowsAsObjects(context.book.getSheetByName('DailyLog')).filter(row => String(row.date) >= weekStart && String(row.date) <= endText && row.weight_kg !== '');
-  logs.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  migrateSheetHeaders(context.book.getSheetByName('DailyLog'), DAILY_LOG_HEADERS);
+  const allLogs = rowsAsObjects(context.book.getSheetByName('DailyLog')).filter(row => String(row.date) >= weekStart && String(row.date) <= endText);
+  const logs = allLogs.filter(row => row.weight_kg !== '').sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const stepLogs = allLogs.filter(row => row.steps !== '');
   const weightChange = logs.length >= 2 ? round1(Number(logs[logs.length - 1].weight_kg) - Number(logs[0].weight_kg)) : null;
   const result = {
     week_start: weekStart, week_end: endText, recorded_days: days.length,
+    average_steps: stepLogs.length ? Math.round(stepLogs.reduce((sum, row) => sum + Number(row.steps), 0) / stepLogs.length) : null,
     weight_change_kg: weightChange, feedback: days.length < 3 ? '目前紀錄天數較少，先持續記錄，不做營養缺乏判斷。' : '依有紀錄日的七日區間平均整理。',
     updated_at: new Date().toISOString(),
   };
@@ -331,7 +349,7 @@ function getFamilyIndexSheet() {
   const id = getConfig().familyIndexSheetId;
   if (!id) throw new Error('FAMILY_INDEX_SHEET_ID 尚未設定');
   const book = SpreadsheetApp.openById(id);
-  return ensureSheet(book, 'Members', MEMBER_HEADERS);
+  let sheet = book.getSheetByName('Members'); if (!sheet) sheet = book.insertSheet('Members'); migrateSheetHeaders(sheet, MEMBER_HEADERS); return sheet;
 }
 
 function getMemberContext(memberId) {

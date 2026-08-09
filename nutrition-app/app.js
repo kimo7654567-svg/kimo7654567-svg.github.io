@@ -31,10 +31,12 @@ function renderMembers() {
 
 async function selectMember(memberId) {
   state.active = state.members.find(member => member.member_id === memberId);
+  if (!localStorage.getItem(`nutritionAuth:${memberId}`)) return showLogin(state.active);
   try {
     state.profile = await callApi('get_profile', { memberId });
   } catch (error) {
-    toast(error.message);
+    if (/登入|密碼|憑證/.test(error.message)) { localStorage.removeItem(`nutritionAuth:${memberId}`); showLogin(state.active); }
+    else toast(error.message);
     return;
   }
   $('#membersView').classList.add('hidden');
@@ -55,7 +57,7 @@ async function loadDailySummary() {
     const summary = await callApi('daily_summary', { memberId: state.active.member_id, date: today() });
     $('#calories').textContent = Math.round(summary.calories);
     $('#protein').textContent = Math.round(summary.protein_g);
-    $('#vegetables').textContent = Number(summary.vegetable_serving).toFixed(1);
+    $('#vegetables').textContent = summary.water_ml == null ? '—' : Math.round(summary.water_ml);
     $('#feedback').textContent = summary.feedback;
   } catch (error) {
     $('#feedback').textContent = error.message;
@@ -89,6 +91,10 @@ function openMemberDialog(profile = null) {
   form.reset();
   form.elements.namedItem('member_id').value = profile ? profile.member_id : '';
   $('#memberFormStatus').textContent = '';
+  let passwordRow = $('#memberPasswordRow');
+  if (!passwordRow) { $('#memberFormStatus').insertAdjacentHTML('beforebegin', '<label id="memberPasswordRow">登入密碼（至少 6 個字元）<input name="password" type="password" minlength="6" autocomplete="new-password"></label>'); passwordRow = $('#memberPasswordRow'); }
+  passwordRow.classList.toggle('hidden', Boolean(profile));
+  passwordRow.querySelector('input').required = !profile;
   state.customAvatar = profile && String(profile.avatar_id).startsWith('data:image/') ? profile.avatar_id : '';
   if (profile) {
     ['name', 'birthday', 'sex', 'height_cm', 'weight_kg', 'activity_level', 'usual_daily_steps', 'goal', 'allergy'].forEach(key => {
@@ -141,7 +147,8 @@ $('#memberForm').onsubmit = async event => {
       : '正在建立個人資料與專屬 Google Sheet，第一次可能需要 10～20 秒，請稍候。';
     const created = memberId
       ? await callApi('update_profile', { memberId, profile })
-      : await callApi('create_member', { profile });
+      : await callApi('create_member', { profile, password: values.password });
+    if (created.auth_token) localStorage.setItem(`nutritionAuth:${created.member_id}`, created.auth_token);
     $('#memberDialog').close();
     await loadMembers();
     await selectMember(created.member_id);
@@ -343,12 +350,12 @@ async function showWeekly() {
 }
 
 function openDailyLog() {
-  showInfo('飲水／體重（選填）', '<form id="dailyLogForm"><label>飲水 ml<input name="water_ml" type="number" min="0" max="20000"></label><label>體重 kg<input name="weight_kg" type="number" min="1" max="500" step="0.1"></label><button class="primary">儲存</button></form>');
+  showInfo('今日飲水與步數', '<form id="dailyLogForm"><label>飲水 ml（選填）<input name="water_ml" type="number" min="0" max="20000"></label><label>今日步數（選填）<input name="steps" type="number" min="0" max="100000"></label><button class="primary">儲存</button></form>');
   $('#dailyLogForm').onsubmit = async event => {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget));
     try {
-      await callApi('save_daily_log', { memberId: state.active.member_id, log: { date: today(), water_ml: values.water_ml ? Number(values.water_ml) : null, weight_kg: values.weight_kg ? Number(values.weight_kg) : null } });
+      await callApi('save_daily_log', { memberId: state.active.member_id, log: { date: today(), water_ml: values.water_ml ? Number(values.water_ml) : null, steps: values.steps ? Number(values.steps) : null } });
       $('#infoDialog').close();
       await loadDailySummary();
       toast('已儲存');
@@ -357,6 +364,15 @@ function openDailyLog() {
 }
 
 function showInfo(title, html) { $('#infoTitle').textContent = title; $('#infoBody').innerHTML = html; $('#infoDialog').showModal(); }
+function showLogin(member) {
+  showInfo(member.needs_password ? '設定登入密碼' : `登入 ${member.name}`, `<form id="loginForm"><p class="muted">${member.needs_password ? '這是舊人物資料，請設定至少 6 個字元的密碼。' : '此瀏覽器登入一次後會記住。'}</p><label>密碼<input name="password" type="password" minlength="6" required autocomplete="current-password"></label><button class="primary">${member.needs_password ? '設定並登入' : '登入'}</button></form>`);
+  $('#loginForm').onsubmit = async event => { event.preventDefault(); const password = new FormData(event.currentTarget).get('password'); try { const result = await callApi('login', { memberId: member.member_id, password }); localStorage.setItem(`nutritionAuth:${member.member_id}`, result.auth_token); member.needs_password = false; $('#infoDialog').close(); await selectMember(member.member_id); } catch (error) { toast(error.message); } };
+}
+function showAccountSettings() {
+  if (!state.active) return showInfo('帳號管理', '<p>請先選擇一位家庭成員。</p>');
+  showInfo('帳號管理', `<p>目前人物：<b>${escapeHtml(state.active.name)}</b></p><p class="muted">刪除後，專屬 Google Sheet 會移到雲端硬碟垃圾桶。</p><form id="deleteAccountForm"><label>輸入密碼確認刪除<input name="password" type="password" minlength="6" required></label><button class="danger">刪除我的人物帳號</button></form>`);
+  $('#deleteAccountForm').onsubmit = async event => { event.preventDefault(); if (!confirm(`確定刪除 ${state.active.name} 的全部資料嗎？`)) return; const password = new FormData(event.currentTarget).get('password'); try { const id = state.active.member_id; await callApi('delete_account', { memberId: id, password }); localStorage.removeItem(`nutritionAuth:${id}`); state.active = null; $('#infoDialog').close(); $('#homeView').classList.add('hidden'); $('#membersView').classList.remove('hidden'); await loadMembers(); toast('人物帳號已刪除'); } catch (error) { toast(error.message); } };
+}
 function renderList(items) { return items && items.length ? `<ul>${items.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>` : '<p class="muted">目前沒有足夠資料。</p>'; }
 
 $('#newMemberBtn').onclick = () => openMemberDialog();
@@ -385,4 +401,9 @@ $('#avatars').onchange = () => { state.customAvatar = ''; showCustomAvatar(); };
 document.querySelectorAll('[data-close]').forEach(button => button.onclick = () => { const dialog = button.closest('dialog'); if (dialog.id === 'photoDialog') closeMealDialogOrGoBack(dialog); else dialog.close(); });
 
 renderAvatarOptions('adult-1');
+document.querySelector('header').insertAdjacentHTML('beforeend', '<button id="settingsBtn" class="icon" aria-label="帳號管理">⚙</button>');
+$('#settingsBtn').onclick = showAccountSettings;
+const summaryThird = $('#vegetables').closest('article'); summaryThird.querySelector('small').textContent = '今日飲水'; summaryThird.querySelector('span').textContent = 'ml';
+$('#logBtn').textContent = '飲水／步數';
+const home = $('#homeView'); const panels = home.querySelectorAll('.panel'); const summary = home.querySelector('.summary'); home.insertBefore(panels[0], summary); home.insertBefore(panels[1], summary);
 loadMembers();
