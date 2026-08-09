@@ -1003,6 +1003,14 @@ function validateBeginnerStory(data, level, mustWords) {
     if (sentences.length < 4 || sentences.length > 6) problems.push('句數不是 4–6 句');
     if (sentences.some(s => s.replace(/[^A-Za-z' -]/g, '').trim().split(/\s+/).filter(Boolean).length > 8)) problems.push('有句子超過 8 個英文單字');
   }
+  if (level === 'L1') {
+    const sentences = data.sentences || [];
+    const wordCounts = sentences.map(s => s.replace(/[^A-Za-z' -]/g, '').trim().split(/\s+/).filter(Boolean).length);
+    const totalWords = wordCounts.reduce((sum, count) => sum + count, 0);
+    if (sentences.length < 8 || sentences.length > 12) problems.push('句數不是 8–12 句');
+    if (totalWords < 80 || totalWords > 120) problems.push(`總字數是 ${totalWords}，需要 80–120 字`);
+    if (wordCounts.some(count => count < 7 || count > 12)) problems.push('每句需要約 7–12 個英文單字');
+  }
   return problems;
 }
 
@@ -1126,15 +1134,21 @@ async function generateStory() {
       <span class="story-badge">${levelNames[storyState.level]||storyState.level}</span>
       <span class="story-badge">⏱ ${html(data.reading_time||'')}</span>`;
 
-    // 顯示傳給 AI 的單字
+    // 在故事開始前顯示本篇指定的複習單字
     const debugArea = document.getElementById('storyDebugWords');
     if (debugArea) {
-      const extraWords = learnedWords.filter(w => !mustWords.includes(w));
-      debugArea.innerHTML = mustWords.length > 0 ? `
-        <div style="background:#FFF9C4;border-radius:12px;padding:10px 14px;font-size:12px;color:#5D4037;margin-bottom:8px;line-height:1.8">
-          <strong>📌 必用單字：</strong>${mustWords.map(html).join(', ')}
-          ${extraWords.length > 0 ? `<br><strong>➕ 補充單字：</strong>${extraWords.map(html).join(', ')}` : ''}
-        </div>` : '';
+      const speakLang = isJa ? 'ja-JP' : 'en-US';
+      debugArea.innerHTML = optimizedWords.length > 0 ? `
+        <section class="story-review-words">
+          <div class="story-review-title">🔁 本篇複習單字 <span>${optimizedWords.length} 個</span></div>
+          <div class="story-review-hint">故事開始前先讀一次，再到故事中找找看！</div>
+          <div class="story-review-list">${optimizedWords.map(w => {
+            const word = isJa ? w.word : w.en;
+            return `<button class="story-review-word" onclick="speak('${esc(word)}','${speakLang}')">
+              <strong>${html(word)}</strong><span>${html(w.zh || '')}</span><b>🔊</b>
+            </button>`;
+          }).join('')}</div>
+        </section>` : '';
     }
 
     document.getElementById('storyBody').innerHTML = (data.sentences||[])
