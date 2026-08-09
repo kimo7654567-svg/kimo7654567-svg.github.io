@@ -1,5 +1,5 @@
 const $ = selector => document.querySelector(selector);
-const state = { members: [], active: null, profile: null, files: [], analysis: null, customAvatar: '', editRecordId: '', draftFoods: [], favorites: [] };
+const state = { members: [], active: null, profile: null, files: [], analysis: null, customAvatar: '', editRecordId: '', draftEditIndex: null, draftFoods: [], favorites: [] };
 const avatarIds = ['adult-1', 'adult-2', 'child-1', 'child-2'];
 const nutrientLabels = { calories: '熱量 kcal', protein_g: '蛋白質 g', fat_g: '脂肪 g', carbohydrate_g: '碳水 g', fiber_g: '纖維 g', sodium_mg: '鈉 mg', calcium_mg: '鈣 mg', iron_mg: '鐵 mg', zinc_mg: '鋅 mg', vitamin_a_ug: '維生素 A μg', vitamin_c_mg: '維生素 C mg', vitamin_d_ug: '維生素 D μg', omega3_mg: 'Omega-3 mg' };
 
@@ -181,6 +181,7 @@ function openPhotoDialog() {
   state.files = [];
   state.analysis = null;
   state.editRecordId = '';
+  state.draftEditIndex = null;
   state.draftFoods = [];
   $('#captureStep').classList.remove('hidden');
   $('#reviewStep').classList.add('hidden');
@@ -202,8 +203,9 @@ async function loadFavorites() {
 function renderDraftFoods() {
   let area = $('#draftFoods');
   if (!area) { $('#analyzeBtn').insertAdjacentHTML('beforebegin', '<div id="draftFoods"></div>'); area = $('#draftFoods'); }
-  area.innerHTML = `${state.favorites.length ? `<div class="favorites"><b>我的最愛</b>${state.favorites.map(item => `<button type="button" data-favorite="${item.favorite_id}">☆ ${escapeHtml(item.food.name)}</button>`).join('')}</div>` : ''}${state.draftFoods.length ? `<div class="draft-list"><b>手動／最愛食物</b>${state.draftFoods.map((food, index) => `<div class="draft-food"><div><strong>${escapeHtml(food.name)}</strong><small>${Math.round(Number(food.estimated_total_weight_g) || 0)} g｜${Math.round(Number(food.nutrients && food.nutrients.calories) || 0)} kcal</small></div><button type="button" data-remove-draft="${index}">刪除</button></div>`).join('')}</div>` : '<p class="muted">尚未加入手動食物；已選照片會顯示在上方。</p>'}`;
+  area.innerHTML = `${state.favorites.length ? `<div class="favorites"><b>我的最愛</b>${state.favorites.map(item => `<button type="button" data-favorite="${item.favorite_id}">☆ ${escapeHtml(item.food.name)}</button>`).join('')}</div>` : ''}${state.draftFoods.length ? `<div class="draft-list"><b>手動／最愛食物</b>${state.draftFoods.map((food, index) => `<div class="draft-food"><div><strong>${escapeHtml(food.name)}</strong><small>${food.estimated_total_weight_g == null ? '重量估算中' : `${Math.round(Number(food.estimated_total_weight_g))} g`}｜${food.nutrients && food.nutrients.calories != null ? `${Math.round(Number(food.nutrients.calories))} kcal` : '熱量估算中'}</small></div><div class="draft-actions"><button type="button" data-edit-draft="${index}">修改</button><button type="button" data-remove-draft="${index}">刪除</button></div></div>`).join('')}</div>` : '<p class="muted">尚未加入手動食物；已選照片會顯示在上方。</p>'}`;
   area.querySelectorAll('[data-favorite]').forEach(button => button.onclick = () => { const item = state.favorites.find(value => value.favorite_id === button.dataset.favorite); state.draftFoods.push(structuredClone(item.food)); renderDraftFoods(); });
+  area.querySelectorAll('[data-edit-draft]').forEach(button => button.onclick = () => editDraftFood(Number(button.dataset.editDraft)));
   area.querySelectorAll('[data-remove-draft]').forEach(button => button.onclick = () => { state.draftFoods.splice(Number(button.dataset.removeDraft), 1); renderDraftFoods(); });
 }
 
@@ -250,6 +252,7 @@ function emptyManualFood() {
 function openManualEntry() {
   state.manualEntry = true;
   state.editRecordId = '';
+  state.draftEditIndex = null;
   state.analysis = { foods: [emptyManualFood()] };
   $('#captureStep').classList.add('hidden');
   $('#reviewStep').classList.remove('hidden');
@@ -259,6 +262,20 @@ function openManualEntry() {
   $('#saveMealBtn').textContent = '加入餐點草稿';
   renderFoodEditor();
   $('#photoDialog').showModal();
+}
+
+function editDraftFood(index) {
+  state.manualEntry = true;
+  state.editRecordId = '';
+  state.draftEditIndex = index;
+  state.analysis = { foods: [structuredClone(state.draftFoods[index])] };
+  $('#captureStep').classList.add('hidden');
+  $('#reviewStep').classList.remove('hidden');
+  $('#photoDialogTitle').textContent = '修改草稿食物';
+  $('#reviewNotice').textContent = '修改後會更新這一筆餐點草稿。';
+  $('#addManualFoodBtn').classList.add('hidden');
+  $('#saveMealBtn').textContent = '更新餐點草稿';
+  renderFoodEditor();
 }
 
 function addFiles(fileList) {
@@ -343,8 +360,9 @@ async function saveMeal() {
     if (foods.some(food => !String(food.name).trim())) throw new Error('請填寫每一項食物名稱');
     button.disabled = true;
     if (state.manualEntry && !state.editRecordId) {
-      const draftStart = state.draftFoods.length;
-      state.draftFoods.push(...foods);
+      const draftStart = state.draftEditIndex ?? state.draftFoods.length;
+      if (state.draftEditIndex == null) state.draftFoods.push(...foods);
+      else state.draftFoods.splice(state.draftEditIndex, 1, ...foods);
       showMealDraft();
       $('#analyzeBtn').disabled = true;
       toast('已加入餐點草稿，正在估算營養');
@@ -370,12 +388,12 @@ async function saveMeal() {
   finally {
     button.disabled = false;
     $('#analyzeBtn').disabled = false;
-    button.textContent = state.editRecordId ? '儲存修改' : state.manualEntry ? '加入餐點草稿' : '確認並保存這一餐';
+    button.textContent = state.editRecordId ? '儲存修改' : state.draftEditIndex != null ? '更新餐點草稿' : state.manualEntry ? '加入餐點草稿' : '確認並保存這一餐';
   }
 }
 
 function showMealDraft() {
-  state.manualEntry = false; state.analysis = null;
+  state.manualEntry = false; state.analysis = null; state.draftEditIndex = null;
   $('#captureStep').classList.remove('hidden'); $('#reviewStep').classList.add('hidden'); $('#photoDialogTitle').textContent = '新增餐點';
   $('#analyzeBtn').textContent = '餐點輸入完畢，開始分析記錄';
   renderPreviews(); renderDraftFoods();
@@ -385,6 +403,7 @@ function discardMealDraft() {
   state.files = [];
   state.analysis = null;
   state.editRecordId = '';
+  state.draftEditIndex = null;
   state.draftFoods = [];
   $('#previews').innerHTML = '';
   $('#photos').value = '';
