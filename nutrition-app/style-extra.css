@@ -37,3 +37,4 @@ h1, h2, h3 { font-family: Georgia, "Noto Serif TC", serif; letter-spacing: .04em
 .draft-food:first-of-type { margin-top: 8px; }
 .draft-food small { display: block; color: var(--muted); }
 .draft-food button { border: 1px solid var(--line); border-radius: 9px; padding: 6px 9px; background: white; }
+.app-version { padding: 24px 12px; color: var(--muted); font-size: .75rem; text-align: center; }
