@@ -192,7 +192,11 @@ function getWeeklySummary(memberId, weekStart) {
   const endText = formatDate(end);
   const rows = rowsAsObjects(context.book.getSheetByName('Meals')).filter(row => String(row.date) >= weekStart && String(row.date) <= endText);
   const grouped = {};
-  rows.forEach(row => { const key = String(row.date); (grouped[key] ||= []).push(row); });
+  rows.forEach(row => {
+    const key = String(row.date);
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(row);
+  });
   const days = Object.keys(grouped);
   const average = emptyTotals();
   days.forEach(day => addTotals(average, summarizeMealRows(grouped[day])));
