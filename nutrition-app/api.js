@@ -13,7 +13,7 @@ async function callApi(action, payload = {}) {
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action, ...payload, authToken: payload.memberId ? localStorage.getItem(`nutritionAuth:${payload.memberId}`) || '' : '' }),
+      body: JSON.stringify({ action, ...payload }),
       signal: controller.signal,
     });
     if (!response.ok) throw new Error(`API HTTP ${response.status}`);

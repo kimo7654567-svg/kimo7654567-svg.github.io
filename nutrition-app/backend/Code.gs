@@ -27,17 +27,16 @@ function doPost(e) {
 }
 
 function authorizeRequest(body) {
-  if (['health', 'list_members', 'create_member', 'login'].indexOf(body.action) >= 0) return true;
-  verifyAuthToken(body.memberId, body.authToken); return true;
+  return true;
 }
 
 function routeRequest(body) {
   switch (body.action) {
     case 'health': return { version: API_VERSION, geminiConfigured: Boolean(getConfig().geminiKey) };
     case 'list_members': return listMembers();
-    case 'create_member': return createMember(body.profile, body.password);
+    case 'create_member': return createMember(body.profile);
     case 'login': return loginMember(body.memberId, body.password);
-    case 'delete_account': return deleteAccount(body.memberId, body.password);
+    case 'delete_account': return deleteAccount(body.memberId);
     case 'get_profile': return getProfile(body.memberId);
     case 'update_profile': return updateProfile(body.memberId, body.profile);
     case 'analyze_food': return analyzeFood(body.images);
@@ -69,13 +68,12 @@ function getConfig() {
 function listMembers() {
   return rowsAsObjects(getFamilyIndexSheet()).map(row => ({
     member_id: String(row.member_id), name: String(row.name),
-    is_child: toBoolean(row.is_child), avatar_id: String(row.avatar_id), needs_password: !row.password_hash,
+    is_child: toBoolean(row.is_child), avatar_id: String(row.avatar_id),
   }));
 }
 
-function createMember(profile, password) {
+function createMember(profile) {
   validateProfile(profile);
-  validatePassword(password);
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
@@ -85,11 +83,11 @@ function createMember(profile, password) {
     initializeMemberBook(memberBook);
     const storedProfile = normalizeProfile(memberId, profile, now, now);
     appendObject(memberBook.getSheetByName('Profile'), PROFILE_HEADERS, storedProfile);
-    const salt = Utilities.getUuid(); appendObject(getFamilyIndexSheet(), MEMBER_HEADERS, {
+    appendObject(getFamilyIndexSheet(), MEMBER_HEADERS, {
       member_id: memberId, name: profile.name, is_child: profile.is_child,
-      avatar_id: profile.avatar_id, spreadsheet_id: memberBook.getId(), password_salt: salt, password_hash: hashPassword(password, salt), auth_version: 1, created_at: now,
+      avatar_id: profile.avatar_id, spreadsheet_id: memberBook.getId(), password_salt: '', password_hash: '', auth_version: 1, created_at: now,
     });
-    storedProfile.auth_token = issueAuthToken(memberId, 1); return storedProfile;
+    return storedProfile;
   } finally {
     lock.releaseLock();
   }
@@ -137,7 +135,7 @@ function analyzeFood(images) {
 }
 
 function loginMember(memberId, password) { const sheet = getFamilyIndexSheet(); const rows = rowsAsObjects(sheet); const index = rows.findIndex(row => String(row.member_id) === String(memberId)); if (index < 0) throw new Error('找不到家庭成員'); const member = rows[index]; validatePassword(password); if (!member.password_hash) { member.password_salt = Utilities.getUuid(); member.password_hash = hashPassword(password, member.password_salt); member.auth_version = 1; replaceObject(sheet, MEMBER_HEADERS, index + 2, member); } else if (hashPassword(password, member.password_salt) !== String(member.password_hash)) throw new Error('密碼錯誤'); return { member_id: memberId, auth_token: issueAuthToken(memberId, Number(member.auth_version) || 1) }; }
-function deleteAccount(memberId, password) { const sheet = getFamilyIndexSheet(); const rows = rowsAsObjects(sheet); const index = rows.findIndex(row => String(row.member_id) === String(memberId)); if (index < 0) throw new Error('找不到家庭成員'); const member = rows[index]; if (hashPassword(password, member.password_salt) !== String(member.password_hash)) throw new Error('密碼錯誤'); DriveApp.getFileById(String(member.spreadsheet_id)).setTrashed(true); sheet.deleteRow(index + 2); return { member_id: memberId, deleted: true }; }
+function deleteAccount(memberId) { const sheet = getFamilyIndexSheet(); const rows = rowsAsObjects(sheet); const index = rows.findIndex(row => String(row.member_id) === String(memberId)); if (index < 0) throw new Error('找不到家庭成員'); const member = rows[index]; DriveApp.getFileById(String(member.spreadsheet_id)).setTrashed(true); sheet.deleteRow(index + 2); return { member_id: memberId, deleted: true }; }
 function validatePassword(password) { if (String(password || '').length < 6 || String(password).length > 100) throw new Error('密碼需為 6 至 100 個字元'); }
 function hashPassword(password, salt) { return bytesToHex(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(salt) + ':' + String(password), Utilities.Charset.UTF_8)); }
 function bytesToHex(bytes) { return bytes.map(value => ('0' + ((value < 0 ? value + 256 : value).toString(16))).slice(-2)).join(''); }
