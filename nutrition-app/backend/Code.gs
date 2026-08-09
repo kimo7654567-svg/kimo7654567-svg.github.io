@@ -1,6 +1,6 @@
 /** 日日好食 Cloud API — Google Apps Script */
 
-const API_VERSION = '1.3.3-date-normalization';
+const API_VERSION = '1.3.4-meal-datetime';
 const MEMBER_HEADERS = ['member_id', 'name', 'is_child', 'avatar_id', 'spreadsheet_id', 'password_salt', 'password_hash', 'auth_version', 'created_at'];
 const PROFILE_HEADERS = ['member_id', 'name', 'birthday', 'sex', 'height_cm', 'weight_kg', 'activity_level', 'usual_daily_steps', 'goal', 'is_child', 'allergy', 'avatar_id', 'created_at', 'updated_at'];
 const MEAL_HEADERS = ['record_id', 'food_item_id', 'date', 'time', 'meal_type', 'food_name', 'quantity', 'estimated_weight_g', 'calories', 'protein_g', 'fat_g', 'carbohydrate_g', 'fiber_g', 'sodium_mg', 'calcium_mg', 'iron_mg', 'zinc_mg', 'vitamin_a_ug', 'vitamin_c_mg', 'vitamin_d_ug', 'omega3_mg', 'vegetable_serving', 'fruit_serving', 'dairy_serving', 'confidence', 'note', 'created_at'];
@@ -212,7 +212,11 @@ function deleteMeal(memberId, recordId) {
 function getMeals(memberId, date) {
   requireDate(date, '日期');
   const sheet = getMemberContext(memberId).book.getSheetByName('Meals');
-  return rowsAsObjects(sheet).filter(row => sheetDateText(row.date) === date);
+  return rowsAsObjects(sheet).filter(row => sheetDateText(row.date) === date).map(row => {
+    row.date = sheetDateText(row.date);
+    row.time = sheetTimeText(row.time);
+    return row;
+  });
 }
 
 function saveDailyLog(memberId, log) {
@@ -542,6 +546,7 @@ function requireDate(value, name) { if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value
 function parseDate(text) { const parts = String(text).split('-').map(Number); return new Date(parts[0], parts[1] - 1, parts[2]); }
 function formatDate(date) { return Utilities.formatDate(date, 'Asia/Taipei', 'yyyy-MM-dd'); }
 function sheetDateText(value) { return value instanceof Date && !isNaN(value.getTime()) ? formatDate(value) : String(value || ''); }
+function sheetTimeText(value) { const text = String(value || ''); if (/^\d{2}:\d{2}/.test(text)) return text.slice(0, 5); const date = value instanceof Date ? value : new Date(text); return !isNaN(date.getTime()) ? Utilities.formatDate(date, 'Asia/Taipei', 'HH:mm') : text; }
 function sheetCellText(value) { return value instanceof Date && !isNaN(value.getTime()) ? sheetDateText(value) : String(value); }
 function numberInRange(value, min, max, name) { const number = Number(value); if (!Number.isFinite(number) || number < min || number > max) throw new Error(name + '超出合理範圍'); return number; }
 function numberOrZero(value) { const number = Number(value); return Number.isFinite(number) && number >= 0 ? number : 0; }

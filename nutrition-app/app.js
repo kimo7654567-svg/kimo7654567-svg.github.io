@@ -96,15 +96,16 @@ async function loadMeals() {
 
 function renderMealTimeline(rows) {
   const labels = { breakfast: '早餐', brunch: '早午餐', lunch: '午餐', dinner: '晚餐', snack: '點心' };
+  const displayTime = value => { const text = String(value || ''); if (/^\d{2}:\d{2}/.test(text)) return text.slice(0, 5); const date = new Date(text); return isNaN(date.getTime()) ? text : date.toLocaleTimeString('zh-TW', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit', hour12: false }); };
   const groups = Object.values(rows.reduce((result, row) => {
     const id = String(row.record_id);
-    if (!result[id]) result[id] = { id, time: row.time, type: row.meal_type, foods: [], calories: 0, protein: 0 };
+    if (!result[id]) result[id] = { id, date: row.date || $('#historyDate').value, time: displayTime(row.time), type: row.meal_type, foods: [], calories: 0, protein: 0 };
     result[id].foods.push(row);
     result[id].calories += Number(row.calories) || 0;
     result[id].protein += Number(row.protein_g) || 0;
     return result;
   }, {})).sort((a, b) => String(a.time).localeCompare(String(b.time)));
-  $('#mealList').innerHTML = groups.length ? groups.map(group => `<article class="meal-card"><div class="meal-head"><div><b>${labels[group.type] || escapeHtml(group.type)} ${escapeHtml(group.time || '')}</b><p>${group.foods.map(food => escapeHtml(food.food_name)).join('、')}</p><small>${Math.round(group.calories)} kcal｜蛋白質 ${Math.round(group.protein)} g</small></div><div><button data-edit-meal="${group.id}">修改</button><button data-delete-meal="${group.id}">刪除</button></div></div><details><summary>查看內容</summary>${group.foods.map(food => `<div class="food-row"><span>${escapeHtml(food.food_name)}</span><b>${Math.round(Number(food.estimated_weight_g))} g</b></div>`).join('')}</details></article>`).join('') : '<p class="muted">這一天還沒有紀錄。</p>';
+  $('#mealList').innerHTML = groups.length ? groups.map(group => `<article class="meal-card"><div class="meal-head"><div><b>${labels[group.type] || escapeHtml(group.type)} ${escapeHtml(group.date || '')} ${escapeHtml(group.time || '')}</b><p>${group.foods.map(food => escapeHtml(food.food_name)).join('、')}</p><small>${Math.round(group.calories)} kcal｜蛋白質 ${Math.round(group.protein)} g</small></div><div><button data-edit-meal="${group.id}">修改</button><button data-delete-meal="${group.id}">刪除</button></div></div><details><summary>查看內容</summary>${group.foods.map(food => `<div class="food-row"><span>${escapeHtml(food.food_name)}</span><b>${Math.round(Number(food.estimated_weight_g))} g</b></div>`).join('')}</details></article>`).join('') : '<p class="muted">這一天還沒有紀錄。</p>';
   document.querySelectorAll('[data-edit-meal]').forEach(button => button.onclick = () => editMeal(groups.find(group => group.id === button.dataset.editMeal)));
   document.querySelectorAll('[data-delete-meal]').forEach(button => button.onclick = () => deleteMeal(button.dataset.deleteMeal));
 }
