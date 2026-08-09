@@ -1,0 +1,5 @@
+.panel-head { display: flex; justify-content: space-between; align-items: center; }
+.panel-head h3 { margin: 0; }
+.panel-head input { width: auto; margin: 0; }
+.active-member #editMemberBtn { margin-left: auto; }
+.active-member #switchBtn { margin-left: 0; }
