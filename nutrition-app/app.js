@@ -183,7 +183,7 @@ async function deleteMeal(recordId) {
 
 function emptyManualFood() {
   return {
-    name: '', quantity: 1, estimated_total_weight_g: 100, confidence: 1,
+    name: '', quantity: 1, estimated_total_weight_g: null, confidence: 1,
     nutrients: Object.fromEntries(Object.keys(nutrientLabels).map(key => [key, 0])),
     vegetable_serving: 0, fruit_serving: 0, dairy_serving: 0,
     note: '手動紀錄', observed_in_images: [],
@@ -193,12 +193,11 @@ function emptyManualFood() {
 function openManualEntry() {
   state.manualEntry = true;
   state.editRecordId = '';
-  state.files = [];
   state.analysis = { foods: [emptyManualFood()] };
   $('#captureStep').classList.add('hidden');
   $('#reviewStep').classList.remove('hidden');
   $('#photoDialogTitle').textContent = '手動新增餐點';
-  $('#reviewNotice').textContent = '請輸入食物名稱與重量；未填寫的營養項目會記為 0。';
+  $('#reviewNotice').textContent = '只要填食物名稱；重量與熱量不知道可以留空，由 AI 估算。';
   $('#addManualFoodBtn').classList.remove('hidden');
   renderFoodEditor();
   $('#photoDialog').showModal();
@@ -254,6 +253,11 @@ async function analyzePhotos() {
 }
 
 function renderFoodEditor() {
+  if (state.manualEntry) {
+    $('#foodEditor').innerHTML = state.analysis.foods.map((food, index) => `<div class="food-card" data-index="${index}"><div class="dialog-head"><b>食物 ${index + 1}</b>${state.analysis.foods.length > 1 ? `<button type="button" data-remove="${index}">刪除</button>` : ''}</div><label>食物名稱或份量描述<input data-key="name" maxlength="100" placeholder="例如：雞腿便當一個、無糖豆漿一杯" value="${escapeHtml(food.name)}"></label><div class="two"><label>重量 g（選填）<input type="number" min="0.1" step="0.1" data-optional="estimated_total_weight_g" value="${Number(food.estimated_total_weight_g) > 0 ? food.estimated_total_weight_g : ''}"></label><label>熱量 kcal（選填）<input type="number" min="0" step="1" data-optional-calories value="${Number(food.nutrients && food.nutrients.calories) > 0 ? food.nutrients.calories : ''}"></label></div></div>`).join('');
+    document.querySelectorAll('[data-remove]').forEach(button => button.onclick = () => { state.analysis.foods.splice(Number(button.dataset.remove), 1); renderFoodEditor(); });
+    return;
+  }
   $('#foodEditor').innerHTML = state.analysis.foods.map((food, index) => `<div class="food-card" data-index="${index}"><div class="dialog-head"><b>食物 ${index + 1}</b>${state.analysis.foods.length > 1 ? `<button type="button" class="remove-food" data-remove="${index}">刪除</button>` : ''}</div><label>食物名稱<input data-key="name" maxlength="100" required value="${escapeHtml(food.name)}"></label><div class="two"><label>數量<input type="number" min="1" data-key="quantity" value="${food.quantity}"></label><label>合計重量 g<input type="number" min="0.1" step="0.1" data-key="estimated_total_weight_g" value="${food.estimated_total_weight_g}"></label></div>${food.observed_in_images && food.observed_in_images.length ? `<small class="muted">出現在照片 ${food.observed_in_images.join('、')}；只計算一次</small>` : ''}<div class="food-grid">${Object.entries(nutrientLabels).map(([key, label]) => `<label>${label}<input type="number" min="0" step="0.1" data-nutrient="${key}" value="${food.nutrients[key] ?? 0}"></label>`).join('')}</div><div class="food-grid"><label>蔬菜份<input type="number" min="0" step="0.5" data-key="vegetable_serving" value="${food.vegetable_serving || 0}"></label><label>水果份<input type="number" min="0" step="0.5" data-key="fruit_serving" value="${food.fruit_serving || 0}"></label><label>乳品份<input type="number" min="0" step="0.5" data-key="dairy_serving" value="${food.dairy_serving || 0}"></label></div><label>備註<input data-key="note" value="${escapeHtml(food.note || '')}"></label></div>`).join('');
   document.querySelectorAll('[data-remove]').forEach(button => button.onclick = () => {
     state.analysis.foods.splice(Number(button.dataset.remove), 1);
@@ -266,14 +270,25 @@ function editedFoods() {
     const food = structuredClone(state.analysis.foods[index]);
     card.querySelectorAll('[data-key]').forEach(input => food[input.dataset.key] = input.type === 'number' ? Number(input.value) : input.value);
     card.querySelectorAll('[data-nutrient]').forEach(input => food.nutrients[input.dataset.nutrient] = Number(input.value));
+    card.querySelectorAll('[data-optional]').forEach(input => food[input.dataset.optional] = input.value ? Number(input.value) : null);
+    const calories = card.querySelector('[data-optional-calories]');
+    if (calories) food.nutrients.calories = calories.value ? Number(calories.value) : null;
     return food;
   });
 }
 
 async function saveMeal() {
+  const button = $('#saveMealBtn');
   try {
-    if (editedFoods().some(food => !String(food.name).trim())) throw new Error('請填寫每一項食物名稱');
-    const meal = { date: $('#historyDate').value || today(), time: new Date().toTimeString().slice(0, 5), meal_type: $('#mealType').value, foods: editedFoods() };
+    let foods = editedFoods();
+    if (foods.some(food => !String(food.name).trim())) throw new Error('請填寫每一項食物名稱');
+    button.disabled = true;
+    if (state.manualEntry) {
+      button.textContent = 'AI 正在估算並保存…';
+      const result = await callApi('analyze_manual_food', { foods: foods.map(food => ({ name: food.name, estimated_weight_g: food.estimated_total_weight_g, calories: food.nutrients.calories })) });
+      foods = result.foods;
+    }
+    const meal = { date: $('#historyDate').value || today(), time: new Date().toTimeString().slice(0, 5), meal_type: $('#mealType').value, foods };
     await callApi(state.editRecordId ? 'update_meal' : 'save_meal', { memberId: state.active.member_id, recordId: state.editRecordId, meal });
     state.files = [];
     state.analysis = null;
@@ -282,6 +297,31 @@ async function saveMeal() {
     await refreshHome();
     toast(state.editRecordId ? '餐點已更新' : '已保存文字紀錄，照片未保存');
   } catch (error) { toast(error.message); }
+  finally { button.disabled = false; button.textContent = '確認並保存這一餐'; }
+}
+
+function discardMealDraft() {
+  state.files = [];
+  state.analysis = null;
+  state.editRecordId = '';
+  $('#previews').innerHTML = '';
+  $('#photos').value = '';
+  $('#cameraPhotos').value = '';
+}
+
+function closeMealDialogOrGoBack(dialog) {
+  if ($('#captureStep').classList.contains('hidden')) {
+    state.manualEntry = false;
+    state.analysis = null;
+    state.editRecordId = '';
+    $('#captureStep').classList.remove('hidden');
+    $('#reviewStep').classList.add('hidden');
+    $('#photoDialogTitle').textContent = '新增餐點';
+    renderPreviews();
+    return;
+  }
+  discardMealDraft();
+  dialog.close();
 }
 
 async function showAdvice() {
@@ -324,6 +364,7 @@ $('#editMemberBtn').onclick = () => openMemberDialog(state.profile);
 $('#switchBtn').onclick = () => { $('#homeView').classList.add('hidden'); $('#membersView').classList.remove('hidden'); state.active = null; };
 $('#cameraBtn').onclick = openPhotoDialog;
 $('#manualBtn').onclick = openManualEntry;
+$('#manualBtn').textContent = '手動輸入';
 $('#cameraPhotos').onchange = event => { addFiles(event.target.files); event.target.value = ''; };
 $('#photos').onchange = event => { addFiles(event.target.files); event.target.value = ''; };
 $('#clearPhotos').onclick = () => { state.files = []; renderPreviews(); };
@@ -341,7 +382,7 @@ $('#historyDate').onchange = loadMeals;
 document.querySelectorAll('[name=is_child]').forEach(input => input.onchange = toggleChildFields);
 $('#avatarPhoto').onchange = async event => { const file = event.target.files[0]; if (!file) return; try { state.customAvatar = await compressAvatar(file); showCustomAvatar(); } catch (error) { toast('無法處理這張圖片'); } event.target.value = ''; };
 $('#avatars').onchange = () => { state.customAvatar = ''; showCustomAvatar(); };
-document.querySelectorAll('[data-close]').forEach(button => button.onclick = () => button.closest('dialog').close());
+document.querySelectorAll('[data-close]').forEach(button => button.onclick = () => { const dialog = button.closest('dialog'); if (dialog.id === 'photoDialog') closeMealDialogOrGoBack(dialog); else dialog.close(); });
 
 renderAvatarOptions('adult-1');
 loadMembers();

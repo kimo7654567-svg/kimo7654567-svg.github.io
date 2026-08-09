@@ -38,6 +38,7 @@ function routeRequest(body) {
     case 'get_profile': return getProfile(body.memberId);
     case 'update_profile': return updateProfile(body.memberId, body.profile);
     case 'analyze_food': return analyzeFood(body.images);
+    case 'analyze_manual_food': return analyzeManualFood(body.foods);
     case 'save_meal': return saveMeal(body.memberId, body.meal);
     case 'update_meal': return updateMeal(body.memberId, body.recordId, body.meal);
     case 'delete_meal': return deleteMeal(body.memberId, body.recordId);
@@ -126,6 +127,21 @@ function analyzeFood(images) {
     parts.push({ inlineData: { mimeType: image.mimeType, data: image.data } });
   });
   return enforceFoodAnalysis(callGeminiJson(parts, foodAnalysisSchema()), images.length);
+}
+
+function analyzeManualFood(foods) {
+  if (!Array.isArray(foods) || !foods.length || foods.length > 20) throw new Error('請輸入 1 至 20 種食物');
+  const input = foods.map(food => ({
+    name: requireText(food && food.name, '食物名稱', 100),
+    estimated_weight_g: food.estimated_weight_g == null ? null : numberInRange(food.estimated_weight_g, 0.1, 5000, '重量'),
+    calories: food.calories == null ? null : numberInRange(food.calories, 0, 100000, '熱量'),
+  }));
+  const prompt = `以下是使用者手動輸入的同一餐食物：${JSON.stringify(input)}。依名稱中的份量描述、選填重量與選填熱量，估算每項食物的合計重量及營養。使用者提供的重量或熱量優先採用；未知資料才估算。不可新增使用者沒有輸入的食物。以繁體中文命名。回傳 foodAnalysisSchema 格式，is_food_image=true、image_confidence=1、observed_in_images=[]。所有營養值是該項食物合計值，note 清楚註明為手動輸入的 AI 估算。`;
+  const result = callGeminiJson([{ text: prompt }], foodAnalysisSchema());
+  result.is_food_image = true;
+  result.image_confidence = 1;
+  (result.foods || []).forEach(food => { food.confidence = Math.max(0.5, Number(food.confidence) || 0.7); food.observed_in_images = []; });
+  return enforceFoodAnalysis(result, 0);
 }
 
 function saveMeal(memberId, meal) {
