@@ -1,6 +1,6 @@
 /** 日日好食 Cloud API — Google Apps Script */
 
-const API_VERSION = '1.3.1-gemini-schema';
+const API_VERSION = '1.3.2-simple-schema';
 const MEMBER_HEADERS = ['member_id', 'name', 'is_child', 'avatar_id', 'spreadsheet_id', 'password_salt', 'password_hash', 'auth_version', 'created_at'];
 const PROFILE_HEADERS = ['member_id', 'name', 'birthday', 'sex', 'height_cm', 'weight_kg', 'activity_level', 'usual_daily_steps', 'goal', 'is_child', 'allergy', 'avatar_id', 'created_at', 'updated_at'];
 const MEAL_HEADERS = ['record_id', 'food_item_id', 'date', 'time', 'meal_type', 'food_name', 'quantity', 'estimated_weight_g', 'calories', 'protein_g', 'fat_g', 'carbohydrate_g', 'fiber_g', 'sodium_mg', 'calcium_mg', 'iron_mg', 'zinc_mg', 'vitamin_a_ug', 'vitamin_c_mg', 'vitamin_d_ug', 'omega3_mg', 'vegetable_serving', 'fruit_serving', 'dairy_serving', 'confidence', 'note', 'created_at'];
@@ -469,15 +469,15 @@ function nutritionAdvicePrompt(profile, daily, weekly) {
 }
 
 function foodAnalysisSchema() {
-  const number = { type: 'number', minimum: 0 };
+  const number = { type: 'number' };
   const nutrients = {};
   NUTRIENT_KEYS.forEach(key => nutrients[key] = number);
   return { type: 'object', properties: {
-    is_food_image: { type: 'boolean' }, image_confidence: { type: 'number', minimum: 0, maximum: 1 },
-    reason: { type: 'string', nullable: true }, foods: { type: 'array', maxItems: 30, items: { type: 'object', properties: {
-      name: { type: 'string' }, quantity: { type: 'integer', minimum: 1 }, estimated_total_weight_g: { type: 'number', minimum: 0 },
-      confidence: { type: 'number', minimum: 0, maximum: 1 }, note: { type: 'string', nullable: true },
-      observed_in_images: { type: 'array', items: { type: 'integer', minimum: 1 } }, nutrients: { type: 'object', properties: nutrients, required: NUTRIENT_KEYS },
+    is_food_image: { type: 'boolean' }, image_confidence: { type: 'number' },
+    reason: { type: 'string', nullable: true }, foods: { type: 'array', items: { type: 'object', properties: {
+      name: { type: 'string' }, quantity: { type: 'integer' }, estimated_total_weight_g: { type: 'number' },
+      confidence: { type: 'number' }, note: { type: 'string', nullable: true },
+      observed_in_images: { type: 'array', items: { type: 'integer' } }, nutrients: { type: 'object', properties: nutrients, required: NUTRIENT_KEYS },
       vegetable_serving: number, fruit_serving: number, dairy_serving: number,
     }, required: ['name', 'quantity', 'estimated_total_weight_g', 'confidence', 'note', 'observed_in_images', 'nutrients', 'vegetable_serving', 'fruit_serving', 'dairy_serving'] } },
   }, required: ['is_food_image', 'image_confidence', 'reason', 'foods'] };
@@ -487,8 +487,8 @@ function adviceSchema() {
   return { type: 'object', properties: {
     data_quality: { type: 'string' }, strengths: { type: 'array', items: { type: 'string' } },
     lower_recorded_sources: { type: 'array', items: { type: 'string' } },
-    home_cooking: { type: 'array', items: { type: 'string' }, minItems: 2, maxItems: 2 },
-    eating_out: { type: 'array', items: { type: 'string' }, minItems: 2, maxItems: 2 },
+    home_cooking: { type: 'array', items: { type: 'string' } },
+    eating_out: { type: 'array', items: { type: 'string' } },
     caution: { type: 'string' },
   }, required: ['data_quality', 'strengths', 'lower_recorded_sources', 'home_cooking', 'eating_out', 'caution'] };
 }
