@@ -25,6 +25,17 @@ function setAnalysisStatus(message = '', isError = false) {
   status.style.color = isError ? '#934b3f' : '';
 }
 
+function setSaveStatus(message = '', isError = false) {
+  let status = $('#saveStatus');
+  if (!status) {
+    $('#saveMealBtn').insertAdjacentHTML('beforebegin', '<p id="saveStatus" class="notice hidden" role="status"></p>');
+    status = $('#saveStatus');
+  }
+  status.textContent = message;
+  status.classList.toggle('hidden', !message);
+  status.style.color = isError ? '#934b3f' : '';
+}
+
 async function loadMembers() {
   try {
     state.members = await callApi('list_members');
@@ -322,8 +333,17 @@ async function analyzePhotos() {
   setAnalysisStatus('正在分析餐點，請稍候…');
   try {
     let photoFoods = [];
+    let draftFoods = [];
     if (state.files.length) { const images = []; for (const file of state.files) images.push(await compressImage(file)); const result = await callApi('analyze_food', { images }); if (!result.is_food_image) { const message = result.reason || '無法可靠辨識食物'; setAnalysisStatus(message, true); toast(message); return; } photoFoods = result.foods; }
-    state.analysis = { foods: [...photoFoods, ...state.draftFoods] };
+    if (state.draftFoods.length) {
+      const favoriteFlags = state.draftFoods.map(food => food.save_favorite);
+      const result = await callApi('analyze_manual_food', { foods: state.draftFoods.map(food => ({ name: food.name, estimated_weight_g: food.estimated_total_weight_g, calories: food.nutrients && food.nutrients.calories })) });
+      draftFoods = result.foods;
+      draftFoods.forEach((food, index) => food.save_favorite = favoriteFlags[index]);
+      const favorites = draftFoods.filter(food => food.save_favorite);
+      if (favorites.length) await callApi('save_favorites', { memberId: state.active.member_id, foods: favorites });
+    }
+    state.analysis = { foods: [...photoFoods, ...draftFoods] };
     $('#reviewNotice').textContent = '分析完成，請確認並修改後再保存。';
     $('#saveMealBtn').textContent = '確認並保存這一餐';
     renderFoodEditor();
@@ -363,6 +383,7 @@ function editedFoods() {
 async function saveMeal() {
   const button = $('#saveMealBtn');
   try {
+    setSaveStatus();
     let foods = editedFoods();
     if (state.manualEntry && !state.editRecordId) foods = foods.filter(food => String(food.name).trim());
     if (!foods.length) throw new Error('請至少填寫一項食物名稱');
@@ -373,27 +394,17 @@ async function saveMeal() {
       if (state.draftEditIndex == null) state.draftFoods.push(...foods);
       else state.draftFoods.splice(state.draftEditIndex, 1, ...foods);
       showMealDraft();
-      $('#analyzeBtn').disabled = true;
-      $('#analyzeBtn').textContent = '正在估算草稿營養…';
-      setAnalysisStatus('草稿已加入，正在估算營養，完成後即可開始分析。');
-      toast('已加入餐點草稿，正在估算營養');
-      const favoriteFlags = foods.map(food => food.save_favorite);
-      const initialFavorites = foods.filter((food, index) => favoriteFlags[index]);
-      if (initialFavorites.length) {
-        await callApi('save_favorites', { memberId: state.active.member_id, foods: initialFavorites });
+      setAnalysisStatus('草稿已加入。按「開始分析記錄」時才會估算營養。');
+      const favorites = foods.filter(food => food.save_favorite);
+      if (favorites.length) {
+        await callApi('save_favorites', { memberId: state.active.member_id, foods: favorites });
         await loadFavorites();
-        setAnalysisStatus('已儲存我的最愛，正在估算草稿營養。');
+        setAnalysisStatus('草稿已加入，我的最愛已儲存。按「開始分析記錄」時才會估算營養。');
       }
-      const result = await callApi('analyze_manual_food', { foods: foods.map(food => ({ name: food.name, estimated_weight_g: food.estimated_total_weight_g, calories: food.nutrients.calories })) });
-      foods = result.foods;
-      const favorites = foods.filter((food, index) => favoriteFlags[index]);
-      if (favorites.length) await callApi('save_favorites', { memberId: state.active.member_id, foods: favorites });
-      state.draftFoods.splice(draftStart, foods.length, ...foods);
-      await loadFavorites(); renderDraftFoods();
-      setAnalysisStatus('草稿營養估算完成，可以開始分析。');
-      toast('餐點草稿估算完成');
+      toast('已加入餐點草稿');
       return;
     }
+    setSaveStatus('正在保存餐點，請稍候…');
     const meal = { date: $('#historyDate').value || today(), time: new Date().toTimeString().slice(0, 5), meal_type: $('#mealType').value, foods };
     await callApi(state.editRecordId ? 'update_meal' : 'save_meal', { memberId: state.active.member_id, recordId: state.editRecordId, meal });
     state.files = [];
@@ -403,7 +414,8 @@ async function saveMeal() {
     await refreshHome();
     toast(state.editRecordId ? '餐點已更新' : '已保存文字紀錄，照片未保存');
   } catch (error) {
-    if (!$('#captureStep').classList.contains('hidden')) setAnalysisStatus(`草稿營養估算失敗：${error.message}`, true);
+    if (!$('#captureStep').classList.contains('hidden')) setAnalysisStatus(`草稿處理失敗：${error.message}`, true);
+    else setSaveStatus(`保存失敗：${error.message}`, true);
     toast(error.message);
   }
   finally {
