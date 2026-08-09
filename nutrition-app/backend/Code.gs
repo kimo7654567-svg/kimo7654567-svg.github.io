@@ -1,6 +1,6 @@
 /** 日日好食 Cloud API — Google Apps Script */
 
-const API_VERSION = '1.1.0-passwordless';
+const API_VERSION = '1.2.0-diagnostics';
 const MEMBER_HEADERS = ['member_id', 'name', 'is_child', 'avatar_id', 'spreadsheet_id', 'password_salt', 'password_hash', 'auth_version', 'created_at'];
 const PROFILE_HEADERS = ['member_id', 'name', 'birthday', 'sex', 'height_cm', 'weight_kg', 'activity_level', 'usual_daily_steps', 'goal', 'is_child', 'allergy', 'avatar_id', 'created_at', 'updated_at'];
 const MEAL_HEADERS = ['record_id', 'food_item_id', 'date', 'time', 'meal_type', 'food_name', 'quantity', 'estimated_weight_g', 'calories', 'protein_g', 'fat_g', 'carbohydrate_g', 'fiber_g', 'sodium_mg', 'calcium_mg', 'iron_mg', 'zinc_mg', 'vitamin_a_ug', 'vitamin_c_mg', 'vitamin_d_ug', 'omega3_mg', 'vegetable_serving', 'fruit_serving', 'dairy_serving', 'confidence', 'note', 'created_at'];
@@ -131,7 +131,7 @@ function analyzeFood(images) {
     parts.push({ text: '照片 ' + (index + 1) });
     parts.push({ inlineData: { mimeType: image.mimeType, data: image.data } });
   });
-  return enforceFoodAnalysis(callGeminiJson(parts, foodAnalysisSchema()), images.length);
+  return enforceFoodAnalysis(callGeminiJson(parts, foodAnalysisSchema(), 'food-photo'), images.length);
 }
 
 function loginMember(memberId, password) { const sheet = getFamilyIndexSheet(); const rows = rowsAsObjects(sheet); const index = rows.findIndex(row => String(row.member_id) === String(memberId)); if (index < 0) throw new Error('找不到家庭成員'); const member = rows[index]; validatePassword(password); if (!member.password_hash) { member.password_salt = Utilities.getUuid(); member.password_hash = hashPassword(password, member.password_salt); member.auth_version = 1; replaceObject(sheet, MEMBER_HEADERS, index + 2, member); } else if (hashPassword(password, member.password_salt) !== String(member.password_hash)) throw new Error('密碼錯誤'); return { member_id: memberId, auth_token: issueAuthToken(memberId, Number(member.auth_version) || 1) }; }
@@ -151,7 +151,7 @@ function analyzeManualFood(foods) {
     calories: food.calories == null ? null : numberInRange(food.calories, 0, 100000, '熱量'),
   }));
   const prompt = `以下是使用者手動輸入的同一餐食物：${JSON.stringify(input)}。依名稱中的份量描述、選填重量與選填熱量，估算每項食物的合計重量及營養。使用者提供的重量或熱量優先採用；未知資料才估算。不可新增使用者沒有輸入的食物。以繁體中文命名。回傳 foodAnalysisSchema 格式，is_food_image=true、image_confidence=1、observed_in_images=[]。所有營養值是該項食物合計值，note 清楚註明為手動輸入的 AI 估算。`;
-  const result = callGeminiJson([{ text: prompt }], foodAnalysisSchema());
+  const result = callGeminiJson([{ text: prompt }], foodAnalysisSchema(), 'manual-food');
   result.is_food_image = true;
   result.image_confidence = 1;
   (result.foods || []).forEach(food => { food.confidence = Math.max(0.5, Number(food.confidence) || 0.7); food.observed_in_images = []; });
@@ -291,7 +291,7 @@ function getNutritionAdvice(memberId, date) {
   const weekly = getWeeklySummary(memberId, formatDate(startDate));
   const daily = getDailySummary(memberId, date);
   const prompt = nutritionAdvicePrompt(profile, daily, weekly);
-  const advice = callGeminiJson([{ text: prompt }], adviceSchema());
+  const advice = callGeminiJson([{ text: prompt }], adviceSchema(), 'nutrition-advice');
   enforceAdviceSafety(advice, profile);
   return advice;
 }
@@ -324,7 +324,7 @@ function enforceAdviceSafety(advice, profile) {
   if (allergies.some(allergy => mealText.includes(allergy))) throw new Error('AI 建議可能包含已記錄的過敏食物，已阻止顯示');
 }
 
-function callGeminiJson(parts, schema) {
+function callGeminiJson(parts, schema, stage) {
   const cfg = getConfig();
   if (!cfg.geminiKey) throw new Error('Gemini API Key 尚未設定');
   const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(cfg.geminiModel) + ':generateContent?key=' + encodeURIComponent(cfg.geminiKey);
@@ -343,12 +343,29 @@ function callGeminiJson(parts, schema) {
   const raw = response.getContentText();
   if (code < 200 || code >= 300) {
     if (code === 429) throw new Error('Gemini 免費額度暫時用完，請稍後再試');
-    throw new Error('Gemini 分析失敗（HTTP ' + code + '）');
+    throw geminiHttpError(code, raw, cfg.geminiModel, stage);
   }
   const result = JSON.parse(raw);
   const text = result.candidates && result.candidates[0] && result.candidates[0].content && result.candidates[0].content.parts && result.candidates[0].content.parts[0].text;
   if (!text) throw new Error('Gemini 沒有回傳可用結果');
   return JSON.parse(text);
+}
+
+function geminiHttpError(code, raw, model, stage) {
+  let status = '';
+  let detail = '';
+  try {
+    const parsed = JSON.parse(raw);
+    status = String(parsed.error && parsed.error.status || '');
+    detail = String(parsed.error && parsed.error.message || '');
+  } catch (ignore) {
+    detail = String(raw || '');
+  }
+  const safeStage = String(stage || 'request').toUpperCase().replace(/[^A-Z0-9]+/g, '-');
+  const safeStatus = status.toUpperCase().replace(/[^A-Z0-9_]+/g, '-');
+  const bugId = ['GEMINI', safeStage, code, safeStatus].filter(Boolean).join('-');
+  const reason = safeErrorMessage({ message: detail || 'Gemini 未提供錯誤內容' });
+  return new Error('[' + bugId + '] ' + reason + '（模型：' + model + '）');
 }
 
 function getFamilyIndexSheet() {
