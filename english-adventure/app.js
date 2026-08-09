@@ -514,7 +514,7 @@ function renderWordItem(w, i, isJa) {
         </div>
         <div class="word-meta">
           <span class="word-streak ${sc}">${sl}</span>
-          <button class="speak-btn" onclick="speak('${esc(w.word)}','ja-JP')">🔊</button>
+          <button class="speak-btn" onclick="speak('${esc(w.reading || w.word)}','ja-JP')">🔊</button>
         </div>
         <button class="delete-btn" onclick="deleteJaWord(${idx})">🗑</button>
       </div>
@@ -661,6 +661,18 @@ function stripEmoji(text) {
   return (text || '').replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27FF}]|[\u{2B00}-\u{2BFF}]|[\u{FE00}-\u{FEFF}]|[\u{1F900}-\u{1F9FF}]|[\u{1FA00}-\u{1FA9F}]/gu, '').trim();
 }
 
+function stripJapaneseRubyNotation(text) {
+  return String(text || '').replace(/[\u3400-\u9FFF々]+\[([ぁ-ゖァ-ヺー]+)\]/g, '$1');
+}
+
+function setSpeechVoice(utterance, lang) {
+  const voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+  const wanted = String(lang || '').toLowerCase();
+  const voice = voices.find(v => v.lang.toLowerCase() === wanted)
+    || voices.find(v => v.lang.toLowerCase().startsWith(wanted.split('-')[0]));
+  if (voice) utterance.voice = voice;
+}
+
 function speak(text, lang, rate) {
   lang = lang || 'en-US';
   rate = rate || 0.85;
@@ -668,8 +680,10 @@ function speak(text, lang, rate) {
   window.speechSynthesis.cancel();
   // iPad Safari 需要先 resume 才能發音
   if (window.speechSynthesis.paused) window.speechSynthesis.resume();
-  const u = new SpeechSynthesisUtterance(stripEmoji(text));
+  const spokenText = lang === 'ja-JP' ? stripJapaneseRubyNotation(text) : text;
+  const u = new SpeechSynthesisUtterance(stripEmoji(spokenText));
   u.lang = lang; u.rate = rate;
+  setSpeechVoice(u, lang);
   window.speechSynthesis.speak(u);
 }
 
@@ -678,9 +692,11 @@ function speakWebSpeech(text, langCode, rate) {
     if (!window.speechSynthesis) { resolve(); return; }
     window.speechSynthesis.cancel();
     if (window.speechSynthesis.paused) window.speechSynthesis.resume();
-    const u = new SpeechSynthesisUtterance(stripEmoji(text));
+    const spokenText = langCode === 'ja-JP' ? stripJapaneseRubyNotation(text) : text;
+    const u = new SpeechSynthesisUtterance(stripEmoji(spokenText));
     u.lang = langCode || 'en-US';
     u.rate = rate || 0.85;
+    setSpeechVoice(u, u.lang);
     u.onend = resolve;
     u.onerror = resolve;
     window.speechSynthesis.speak(u);
@@ -719,7 +735,8 @@ function debugStoryWords() {
 async function testTTS() {
   showToast('⏳ 測試中...', 10000);
   try {
-    const result = await callScript({ type: 'tts', text: 'Hello, this is a test.', lang: 'en' });
+    const isJa = state.lang === 'ja';
+    const result = await callScript({ type: 'tts', text: isJa ? 'こんにちは。これは音声テストです。' : 'Hello, this is a test.', lang: isJa ? 'ja' : 'en' });
     if (result.audioData) {
       const audio = new Audio(`data:${result.mimeType || 'audio/wav'};base64,${result.audioData}`);
       audio.play();
@@ -759,6 +776,7 @@ function makeBlank(word) {
 let quiz = { questions: [], idx: 0, correct: 0, type: '', clozeSelected: null };
 
 function getWordKey(word) { return state.lang === 'ja' ? word.word : word.en; }
+function getQuizAnswer(word) { return state.lang === 'ja' ? (word.reading || word.word) : word.en; }
 
 function getSpacedWords() {
   const now = Date.now();
@@ -798,12 +816,12 @@ function renderQuestion() {
   document.getElementById('checkBtn').style.display = 'block';
   document.getElementById('nextBtn').style.display = 'none';
 
-  const wordKey = getWordKey(q.word);
+  const wordKey = getQuizAnswer(q.word);
   const { display } = makeBlank(wordKey);
   const displayHtml = display.split('').map(c =>
-    c === '_' ? `<span class="blank-char">_</span>` : `<span class="fixed-char">${c}</span>`
+    c === '_' ? `<span class="blank-char">_</span>` : `<span class="fixed-char">${html(c)}</span>`
   ).join('');
-  const html = `<div class="question-type-label">填空測驗</div>
+  const questionHtml = `<div class="question-type-label">填空測驗</div>
     <button class="speak-big-btn" id="speakBtn" onclick="speakQuestion()">🔊</button>
     <div class="question-hint">聽發音，寫出完整單字（提示如下）</div>
     <div class="question-zh">${html(q.word.zh)}</div>
@@ -811,7 +829,7 @@ function renderQuestion() {
     <input class="answer-input" id="answerInput" type="text" placeholder="輸入完整單字..."
       autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false"
       style="max-width:240px;margin:0 auto 12px;display:block">`;
-  document.getElementById('questionCard').innerHTML = html;
+  document.getElementById('questionCard').innerHTML = questionHtml;
 }
 
 function speakQuestion() {
@@ -820,7 +838,7 @@ function speakQuestion() {
   if (!btn) return;
   btn.classList.add('speaking');
   const isJa = state.lang === 'ja';
-  speak(getWordKey(q.word), isJa ? 'ja-JP' : 'en-US', 0.8);
+  speak(getQuizAnswer(q.word), isJa ? 'ja-JP' : 'en-US', 0.8);
   setTimeout(() => btn && btn.classList.remove('speaking'), 2000);
 }
 
@@ -829,7 +847,8 @@ function checkAnswer() {
   const input = document.getElementById('answerInput');
   const val = input ? input.value.trim() : '';
   if (!val) { showToast('請填入答案！'); return; }
-  const correct = getWordKey(q.word);
+  const correct = getQuizAnswer(q.word);
+  const wordKey = getWordKey(q.word);
   const isCorrect = val.toLowerCase().trim() === correct.toLowerCase().trim();
   const fb = document.getElementById('feedbackBox');
   fb.style.display = 'block';
@@ -845,7 +864,7 @@ function checkAnswer() {
     const days = SRS_STAGES[stage] ? SRS_STAGES[stage].days : null;
     document.getElementById('feedbackAnswer').textContent = days ? `下次複習：${days}天後` : '🌟 已熟練！';
     const lang = state.lang === 'ja' ? 'ja' : 'en';
-    sheetsUpdate(lang, correct, stage, nextReview);
+    sheetsUpdate(lang, wordKey, stage, nextReview);
     playCorrectSound();
     if (Math.random() < 0.4) confetti();
   } else {
@@ -857,8 +876,8 @@ function checkAnswer() {
     q.word.stage = stage; q.word.streak = stage; q.word.nextReview = nextReview;
     const lang = state.lang === 'ja' ? 'ja' : 'en';
     if (!state.wrongWords[lang]) state.wrongWords[lang] = {};
-    state.wrongWords[lang][correct] = (state.wrongWords[lang][correct] || 0) + 1;
-    sheetsUpdate(lang, correct, stage, nextReview);
+    state.wrongWords[lang][wordKey] = (state.wrongWords[lang][wordKey] || 0) + 1;
+    sheetsUpdate(lang, wordKey, stage, nextReview);
   }
   document.getElementById('checkBtn').style.display = 'none';
   document.getElementById('nextBtn').style.display = 'block';
@@ -914,6 +933,7 @@ function renderFlashcard() {
   const total = words.length;
   const isJa = state.lang === 'ja';
   const wordKey = isJa ? w.word : w.en;
+  const spokenWord = isJa ? (w.reading || w.word) : w.en;
   const speakLang = isJa ? 'ja-JP' : 'en-US';
 
   document.getElementById('quizProgressText').textContent = `複習 ${idx + 1} / ${total}`;
@@ -926,12 +946,12 @@ function renderFlashcard() {
       <div class="flashcard-front ${flipped ? 'hidden' : ''}">
         <div class="flashcard-word">${html(wordKey)}</div>
         ${w.pos ? `<div class="flashcard-pos">${html(isJa ? (w.reading || '') : w.pos)}</div>` : ''}
-        <button class="review-speak-btn" onclick="speak('${esc(wordKey)}','${speakLang}')">🔊 聽發音</button>
+        <button class="review-speak-btn" onclick="speak('${esc(spokenWord)}','${speakLang}')">🔊 聽發音</button>
       </div>
       <div class="flashcard-back ${flipped ? '' : 'hidden'}">
         <div class="flashcard-zh">${html(w.zh)}</div>
         ${w.sentence ? `<div class="flashcard-sentence">${html(w.sentence)}</div>` : ''}
-        <button class="review-speak-btn" onclick="speak('${esc(wordKey)}','${speakLang}')">🔊 再聽一次</button>
+        <button class="review-speak-btn" onclick="speak('${esc(spokenWord)}','${speakLang}')">🔊 再聽一次</button>
       </div>
     </div>
     <div class="flashcard-btns ${flipped ? '' : 'pre-flip'}">
@@ -977,8 +997,8 @@ function selectStoryWords(allWords, level, isJa) {
   const wrongMap = isJa ? (state.wrongWords.ja || {}) : (state.wrongWords.en || {});
   const dueCount = allWords.filter(w => Number(w.nextReview || 0) <= now).length;
   let target = 10;
-  if (!isJa && level === 'L0.5') target = dueCount >= 4 ? 4 : 3;
-  if (!isJa && level === 'L1') target = Math.min(8, Math.max(5, dueCount));
+  if (level === 'L0.5') target = dueCount >= 4 ? 4 : 3;
+  if (level === 'L1') target = Math.min(8, Math.max(5, dueCount));
   target = Math.min(target, allWords.length);
   return [...allWords].map(w => {
     const key = isJa ? w.word : w.en;
@@ -1012,6 +1032,37 @@ function validateBeginnerStory(data, level, mustWords) {
     if (wordCounts.some(count => count < 7 || count > 12)) problems.push('每句需要約 7–12 個英文單字');
   }
   return problems;
+}
+
+function validateJapaneseStory(data, level, mustWords) {
+  const sentences = Array.isArray(data.sentences) ? data.sentences : [];
+  const text = sentences.join(' ');
+  const problems = [];
+  const missing = mustWords.filter(w => !text.includes(String(w)));
+  if (!sentences.length) problems.push('沒有可朗讀的句子');
+  if (missing.length) problems.push(`缺少複習單字：${missing.join('、')}`);
+  const withoutReadings = text.replace(/\[[ぁ-ゖァ-ヺー]+\]/g, '');
+  const characterCount = (withoutReadings.match(/[ぁ-ゖァ-ヺー\u3400-\u9FFF々]/g) || []).length;
+  if (level === 'L0.5') {
+    if (sentences.length < 4 || sentences.length > 6) problems.push('句數不是 4–6 句');
+    if (characterCount < 50 || characterCount > 80) problems.push(`字數是 ${characterCount}，需要 50–80 字`);
+    if (/[\u3400-\u9FFF々ァ-ヺA-Za-z]/.test(text)) problems.push('L0 故事包含漢字、片假名或英文字母');
+  }
+  if (level === 'L1' && (characterCount < 100 || characterCount > 150)) problems.push(`字數是 ${characterCount}，需要 100–150 字`);
+  if ((level === 'L2' || level === 'L3') && (characterCount < 150 || characterCount > 200)) problems.push(`字數是 ${characterCount}，需要 150–200 字`);
+  return problems;
+}
+
+function renderJapaneseRuby(text) {
+  const source = String(text || '');
+  const regex = /([\u3400-\u9FFF々]+)\[([ぁ-ゖァ-ヺー]+)\]/g;
+  let result = '', lastIndex = 0, match;
+  while ((match = regex.exec(source))) {
+    result += html(source.slice(lastIndex, match.index));
+    result += `<ruby>${html(match[1])}<rt>${html(match[2])}</rt></ruby>`;
+    lastIndex = regex.lastIndex;
+  }
+  return result + html(source.slice(lastIndex));
 }
 
 const GENRES = {
@@ -1102,8 +1153,9 @@ async function generateStory() {
     const allWords = isJa ? state.jaWords : state.words;
     const optimizedWords = selectStoryWords(allWords, storyState.level, isJa);
     const mustReview = optimizedWords;
-    const learnedWords = isJa ? optimizedWords.map(w => w.word) : optimizedWords.map(w => w.en);
-    const mustWords = isJa ? mustReview.map(w => w.word) : mustReview.map(w => w.en);
+    const useJapaneseReading = isJa && storyState.level === 'L0.5';
+    const learnedWords = isJa ? optimizedWords.map(w => useJapaneseReading ? (w.reading || w.word) : w.word) : optimizedWords.map(w => w.en);
+    const mustWords = isJa ? mustReview.map(w => useJapaneseReading ? (w.reading || w.word) : w.word) : mustReview.map(w => w.en);
     showToast(`📤 傳給AI：必用 ${mustWords.length} 個`, 3000);
 
     const data = await callScript({
@@ -1113,7 +1165,7 @@ async function generateStory() {
       must_words: mustWords
     });
 
-    const storyProblems = isJa ? [] : validateBeginnerStory(data, storyState.level, mustWords);
+    const storyProblems = isJa ? validateJapaneseStory(data, storyState.level, mustWords) : validateBeginnerStory(data, storyState.level, mustWords);
     if (storyProblems.length) throw new Error('故事難度不符合：' + storyProblems.join('；') + '。請重新生成。');
     const usedAt = Date.now();
     optimizedWords.forEach(w => { w.lastStoryUsed = usedAt; w.storyUseCount = (w.storyUseCount || 0) + 1; });
@@ -1144,15 +1196,16 @@ async function generateStory() {
           <div class="story-review-hint">故事開始前先讀一次，再到故事中找找看！</div>
           <div class="story-review-list">${optimizedWords.map(w => {
             const word = isJa ? w.word : w.en;
-            return `<button class="story-review-word" onclick="speak('${esc(word)}','${speakLang}')">
-              <strong>${html(word)}</strong><span>${html(w.zh || '')}</span><b>🔊</b>
+            const spokenWord = isJa ? (w.reading || w.word) : w.en;
+            return `<button class="story-review-word" onclick="speak('${esc(spokenWord)}','${speakLang}')">
+              <strong>${html(word)}</strong><span>${isJa && w.reading && w.reading !== w.word ? `${html(w.reading)} · ` : ''}${html(w.zh || '')}</span><b>🔊</b>
             </button>`;
           }).join('')}</div>
         </section>` : '';
     }
 
     document.getElementById('storyBody').innerHTML = (data.sentences||[])
-      .map((s,i) => `<span class="story-sent" id="story-sent-${i}" onclick="speakSentence(${i})">${html(s)} </span>`).join('');
+      .map((s,i) => `<span class="story-sent" id="story-sent-${i}" onclick="speakSentence(${i})">${isJa ? renderJapaneseRuby(s) : html(s)} </span>`).join('');
 
     const zhArea = document.getElementById('storyZhArea');
     if (data.story_zh) {
@@ -1176,7 +1229,7 @@ async function generateStory() {
     const speakLang = isJa ? 'ja-JP' : 'en-US';
     document.getElementById('vocabList').innerHTML = vocab.map((v, i) => {
       const wordDisplay = isJa ? `${html(v.word||v.en)} <span style="font-size:12px;color:#90A4AE">${html(v.reading||'')}</span>` : html(v.en||'');
-      const speakWord = isJa ? (v.word||v.en||'') : (v.en||'');
+      const speakWord = isJa ? (v.reading||v.word||v.en||'') : (v.en||'');
       return `<div class="vocab-item">
         <span class="vocab-add-check" id="vchk${i}" onclick="toggleVocab(${i})">${window._storyVocabChecked[i]?'☑️':'⬜'}</span>
         <div>
@@ -1314,6 +1367,10 @@ function clearHighlight() {
 
 // ==================== 50音 ====================
 let hiraganaState = { currentIdx: 0, mode: 'practice' };
+const HIRAGANA_SPECIAL_LESSONS = {
+  'を': { word: 'を', kanji: '', zh: '表示受詞的助詞，通常讀作「お」', emoji: '🔗', pos: '助詞', addToVocab: false, practiced: false },
+  'ん': { word: 'ん', kanji: '', zh: '日語鼻音，通常不放在單字開頭', emoji: '👃', pos: '假名', addToVocab: false, practiced: false },
+};
 
 function renderHiraganaOverview() {
   return HIRAGANA_ROWS.map(row =>
@@ -1360,8 +1417,9 @@ function setHiraMode(mode) { hiraganaState.mode = mode; renderHiraganaScreen(); 
 
 function autoAddHiraganaWord(wordData) {
   if (!wordData || !wordData.word || wordData.zh === '(查詢失敗)') return;
+  if (wordData.addToVocab === false) return;
   if (state.jaWords.find(x => x.word === wordData.word)) return;
-  const wordObj = { word: wordData.word, reading: wordData.word, zh: wordData.zh, pos: '名詞', sentence: '', stage: 0, streak: 0, nextReview: Date.now() };
+  const wordObj = { word: wordData.word, reading: wordData.word, zh: wordData.zh, pos: wordData.pos || '', sentence: '', stage: 0, streak: 0, nextReview: Date.now() };
   state.jaWords.push(wordObj);
   sheetsAdd('ja', wordObj);
 }
@@ -1375,16 +1433,22 @@ async function renderHiraganaPractice() {
   const idx = hiraganaState.currentIdx;
 
   let wordData = state.hiragana[char];
+  if (HIRAGANA_SPECIAL_LESSONS[char] && (!wordData || wordData.addToVocab !== false)) {
+    wordData = { ...HIRAGANA_SPECIAL_LESSONS[char], practiced: !!(wordData && wordData.practiced) };
+    state.hiragana[char] = wordData;
+    save();
+  }
   if (!wordData) {
     content.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-soft)"><span class="loading-dots" style="color:var(--teal-dark)"><span></span><span></span><span></span></span><br><br>AI 生成單字中...</div>`;
     try {
       const r = await callScript({ type: 'ja_hiragana_word', char });
-      wordData = { word: r.word, kanji: r.kanji || '', zh: r.zh, emoji: r.emoji || '📝', practiced: false };
+      if (!r.word || !r.word.startsWith(char) || !/^[ぁ-ゖー]+$/.test(r.word) || !r.zh) throw new Error('AI 回傳的單字不符合指定假名');
+      wordData = { word: r.word, kanji: r.kanji || '', zh: r.zh, emoji: r.emoji || '📝', pos: r.pos || '', practiced: false };
       state.hiragana[char] = wordData;
       autoAddHiraganaWord(wordData);
       save();
     } catch(e) {
-      wordData = { word: char, kanji: '', zh: '(查詢失敗)', emoji: '❓', practiced: false };
+      wordData = { word: char, kanji: '', zh: '(查詢失敗，請稍後重試)', emoji: '❓', pos: '', practiced: false };
     }
   }
 
@@ -1396,15 +1460,15 @@ async function renderHiraganaPractice() {
         <button class="hira-nav-btn" onclick="hiraNav(1)" ${idx===total-1?'disabled':''}>›</button>
       </div>
       <div class="hira-char-display">
-        <div class="hira-big-char" onclick="speak('${char}','ja-JP',0.7)">${char}</div>
+        <div class="hira-big-char" onclick="speak('${char === 'を' ? 'お' : char}','ja-JP',0.7)">${char}</div>
         <div class="hira-romaji">${romaji}</div>
-        <button class="hira-speak-btn" onclick="speak('${char}','ja-JP',0.7)">🔊 發音</button>
+        <button class="hira-speak-btn" onclick="speak('${char === 'を' ? 'お' : char}','ja-JP',0.7)">🔊 發音</button>
       </div>
       <div class="hira-word-card">
-        <div class="hira-word-emoji">${wordData.emoji}</div>
-        <div class="hira-word-text">${wordData.word} ${wordData.kanji ? `<span class="hira-kanji">(${wordData.kanji})</span>` : ''}</div>
-        <div class="hira-word-zh">${wordData.zh}</div>
-        <button class="hira-speak-btn" onclick="speak('${wordData.word}','ja-JP',0.75)">🔊 單字發音</button>
+        <div class="hira-word-emoji">${html(wordData.emoji)}</div>
+        <div class="hira-word-text">${html(wordData.word)} ${wordData.kanji ? `<span class="hira-kanji">(${html(wordData.kanji)})</span>` : ''}</div>
+        <div class="hira-word-zh">${html(wordData.zh)}</div>
+        <button class="hira-speak-btn" onclick="speak('${esc(wordData.word === 'を' ? 'お' : wordData.word)}','ja-JP',0.75)">🔊 單字發音</button>
       </div>
       <div class="hira-write-section">
         <div class="hira-write-label">練習書寫</div>
@@ -1497,12 +1561,12 @@ function renderHiraganaQuestion() {
       </div>
       <div class="progress-bar"><div class="progress-fill" style="width:${Math.round(hiraQuiz.idx/total*100)}%"></div></div>
       <div class="hira-quiz-word">
-        <div class="hira-quiz-emoji">${q.wordData.emoji}</div>
-        <div class="hira-quiz-word-text">${q.wordData.word}</div>
-        <div class="hira-quiz-zh">${q.wordData.zh}</div>
-        <button class="hira-speak-btn" onclick="speak('${q.wordData.word}','ja-JP',0.75)">🔊</button>
+        <div class="hira-quiz-emoji">${html(q.wordData.emoji)}</div>
+        <div class="hira-quiz-word-text">${html(q.wordData.word)}</div>
+        <div class="hira-quiz-zh">${html(q.wordData.zh)}</div>
+        <button class="hira-speak-btn" onclick="speak('${esc(q.wordData.word === 'を' ? 'お' : q.wordData.word)}','ja-JP',0.75)">🔊</button>
       </div>
-      <div class="hira-quiz-label">這個單字的開頭假名是？</div>
+      <div class="hira-quiz-label">${q.wordData.addToVocab === false ? '這個假名是？' : '這個單字的開頭假名是？'}</div>
       <div class="hira-quiz-options">
         ${q.options.map(opt => `<button class="hira-opt-btn" onclick="selectHiraOption(this,'${opt}','${q.char}')">${opt}<br><span style="font-size:11px;color:#90A4AE">${HIRAGANA_ROMAJI[opt]||''}</span></button>`).join('')}
       </div>
