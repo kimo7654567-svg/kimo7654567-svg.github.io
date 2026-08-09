@@ -1,4 +1,4 @@
-const DEFAULT_SCRIPT_URL = '';
+const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyziLzpDRO59mBwD8cHPkzxuDaeQPsqCPY2K164aKA45iFi8VkYNvlr4rqNXwRxcD9uFQ/exec';
 
 function getScriptUrl() {
   return localStorage.getItem('nutritionScriptUrl') || DEFAULT_SCRIPT_URL;
@@ -17,4 +17,3 @@ async function callApi(action, payload = {}) {
   if (!result.ok) throw new Error(result.error || 'API 操作失敗');
   return result.data;
 }
-
