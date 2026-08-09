@@ -1,3 +1,6 @@
+Exit code: 0
+Wall time: 0.1 seconds
+Output:
 .panel-head { display: flex; justify-content: space-between; align-items: center; }
 .panel-head h3 { margin: 0; }
 .panel-head input { width: auto; margin: 0; }
@@ -25,3 +28,12 @@ h1, h2, h3 { font-family: Georgia, "Noto Serif TC", serif; letter-spacing: .04em
 .primary { background: #596b56; }
 .tips { background: #d9ddce; }
 .danger { width: 100%; border: 1px solid #934b3f; background: #934b3f; color: white; border-radius: 12px; padding: 12px; }
+.password-eye { float: right; margin-top: -42px; margin-right: 7px; position: relative; border: 0; background: transparent; padding: 7px; }
+#addManualFoodBtn { margin: 14px 0 28px; width: 100%; padding: 12px; border: 1px dashed var(--green); border-radius: 12px; background: transparent; }
+#saveMealBtn { margin-top: 8px; }
+.favorite-check { margin-top: 15px; padding: 10px; background: var(--soft); border-radius: 10px; }
+.favorite-check input { display: inline-block; width: auto; margin-right: 6px; }
+.favorites { margin: 14px 0; padding: 12px; border: 1px solid var(--line); border-radius: 14px; }
+.favorites button { display: inline-block; width: auto; margin: 7px 6px 0 0; border: 1px solid var(--line); border-radius: 999px; padding: 7px 10px; background: white; }
+
+

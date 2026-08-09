@@ -1,5 +1,8 @@
+Exit code: 0
+Wall time: 0.2 seconds
+Output:
 const $ = selector => document.querySelector(selector);
-const state = { members: [], active: null, profile: null, files: [], analysis: null, customAvatar: '', editRecordId: '' };
+const state = { members: [], active: null, profile: null, files: [], analysis: null, customAvatar: '', editRecordId: '', draftFoods: [], favorites: [] };
 const avatarIds = ['adult-1', 'adult-2', 'child-1', 'child-2'];
 const nutrientLabels = { calories: '熱量 kcal', protein_g: '蛋白質 g', fat_g: '脂肪 g', carbohydrate_g: '碳水 g', fiber_g: '纖維 g', sodium_mg: '鈉 mg', calcium_mg: '鈣 mg', iron_mg: '鐵 mg', zinc_mg: '鋅 mg', vitamin_a_ug: '維生素 A μg', vitamin_c_mg: '維生素 C mg', vitamin_d_ug: '維生素 D μg', omega3_mg: 'Omega-3 mg' };
 
@@ -25,7 +28,7 @@ async function loadMembers() {
 }
 
 function renderMembers() {
-  $('#members').innerHTML = state.members.map(member => `<button class="member" data-id="${member.member_id}"><img src="${avatarUrl(member.avatar_id)}" alt=""><b>${escapeHtml(member.name)}</b><small>${member.is_child ? '兒童' : '成人'}</small></button>`).join('');
+  $('#members').innerHTML = state.members.map(member => `<button class="member" data-id="${member.member_id}"><img src="${avatarUrl(member.avatar_id)}" alt=""><b>${escapeHtml(member.name)}</b>${member.is_child ? '<small>兒童</small>' : ''}</button>`).join('');
   document.querySelectorAll('.member').forEach(button => button.onclick = () => selectMember(button.dataset.id));
 }
 
@@ -43,7 +46,8 @@ async function selectMember(memberId) {
   $('#homeView').classList.remove('hidden');
   $('#activeAvatar').src = avatarUrl(state.active.avatar_id);
   $('#activeName').textContent = state.active.name;
-  $('#activeMode').textContent = state.active.is_child ? '兒童模式' : '成人模式';
+  $('#activeMode').textContent = state.active.is_child ? '兒童模式' : '';
+  $('#activeMode').classList.toggle('hidden', !state.active.is_child);
   $('#historyDate').value = today();
   await refreshHome();
 }
@@ -78,7 +82,9 @@ function renderMealTimeline(rows) {
   const groups = Object.values(rows.reduce((result, row) => {
     const id = String(row.record_id);
     if (!result[id]) result[id] = { id, time: row.time, type: row.meal_type, foods: [], calories: 0, protein: 0 };
-    result[id].foods.push(row); result[id].calories += Number(row.calories) || 0; result[id].protein += Number(row.protein_g) || 0;
+    result[id].foods.push(row);
+    result[id].calories += Number(row.calories) || 0;
+    result[id].protein += Number(row.protein_g) || 0;
     return result;
   }, {})).sort((a, b) => String(a.time).localeCompare(String(b.time)));
   $('#mealList').innerHTML = groups.length ? groups.map(group => `<article class="meal-card"><div class="meal-head"><div><b>${labels[group.type] || escapeHtml(group.type)} ${escapeHtml(group.time || '')}</b><p>${group.foods.map(food => escapeHtml(food.food_name)).join('、')}</p><small>${Math.round(group.calories)} kcal｜蛋白質 ${Math.round(group.protein)} g</small></div><div><button data-edit-meal="${group.id}">修改</button><button data-delete-meal="${group.id}">刪除</button></div></div><details><summary>查看內容</summary>${group.foods.map(food => `<div class="food-row"><span>${escapeHtml(food.food_name)}</span><b>${Math.round(Number(food.estimated_weight_g))} g</b></div>`).join('')}</details></article>`).join('') : '<p class="muted">這一天還沒有紀錄。</p>';
@@ -95,10 +101,11 @@ function openMemberDialog(profile = null) {
   if (!passwordRow) { $('#memberFormStatus').insertAdjacentHTML('beforebegin', '<label id="memberPasswordRow">登入密碼（至少 6 個字元）<input name="password" type="password" minlength="6" autocomplete="new-password"></label>'); passwordRow = $('#memberPasswordRow'); }
   passwordRow.classList.toggle('hidden', Boolean(profile));
   passwordRow.querySelector('input').required = !profile;
+  attachPasswordToggles(form);
   state.customAvatar = profile && String(profile.avatar_id).startsWith('data:image/') ? profile.avatar_id : '';
   if (profile) {
     ['name', 'birthday', 'sex', 'height_cm', 'weight_kg', 'activity_level', 'usual_daily_steps', 'goal', 'allergy'].forEach(key => {
-      if (form.elements[key]) form.elements[key].value = profile[key] ?? '';
+      if (form.elements[key]) form.elements[key].value = key === 'birthday' ? String(profile[key] ?? '').slice(0, 10) : profile[key] ?? '';
     });
     form.querySelector(`[name=is_child][value="${Boolean(profile.is_child)}"]`).checked = true;
   }
@@ -112,11 +119,21 @@ function renderAvatarOptions(selected) {
   $('#avatars').innerHTML = avatarIds.map(id => `<label><input type="radio" name="avatar_id" value="${id}" ${id === selected ? 'checked' : ''}><img src="${avatarUrl(id)}" alt="人像"></label>`).join('');
 }
 
-function showCustomAvatar() { $('#customAvatarPreview').classList.toggle('hidden', !state.customAvatar); if (state.customAvatar) $('#customAvatarPreview').src = state.customAvatar; }
+function showCustomAvatar() {
+  $('#customAvatarPreview').classList.toggle('hidden', !state.customAvatar);
+  if (state.customAvatar) $('#customAvatarPreview').src = state.customAvatar;
+}
+
 async function compressAvatar(file) {
-  const bitmap = await createImageBitmap(file); const size = 160; const scale = Math.max(size / bitmap.width, size / bitmap.height);
-  const width = bitmap.width * scale; const height = bitmap.height * scale; const canvas = document.createElement('canvas');
-  canvas.width = size; canvas.height = size; canvas.getContext('2d').drawImage(bitmap, (size - width) / 2, (size - height) / 2, width, height); bitmap.close();
+  const bitmap = await createImageBitmap(file);
+  const size = 160;
+  const scale = Math.max(size / bitmap.width, size / bitmap.height);
+  const width = bitmap.width * scale;
+  const height = bitmap.height * scale;
+  const canvas = document.createElement('canvas');
+  canvas.width = size; canvas.height = size;
+  canvas.getContext('2d').drawImage(bitmap, (size - width) / 2, (size - height) / 2, width, height);
+  bitmap.close();
   return canvas.toDataURL('image/jpeg', 0.72);
 }
 
@@ -167,6 +184,7 @@ function openPhotoDialog() {
   state.files = [];
   state.analysis = null;
   state.editRecordId = '';
+  state.draftFoods = [];
   $('#captureStep').classList.remove('hidden');
   $('#reviewStep').classList.add('hidden');
   $('#photoDialogTitle').textContent = '新增餐點';
@@ -175,17 +193,48 @@ function openPhotoDialog() {
   $('#photos').value = '';
   $('#cameraPhotos').value = '';
   renderPreviews();
+  loadFavorites();
   $('#photoDialog').showModal();
 }
 
-function editMeal(group) {
-  state.manualEntry = true; state.editRecordId = group.id; state.files = [];
-  state.analysis = { foods: group.foods.map(row => ({ name: row.food_name, quantity: Number(row.quantity) || 1, estimated_total_weight_g: Number(row.estimated_weight_g), confidence: Number(row.confidence) || 1, nutrients: Object.fromEntries(Object.keys(nutrientLabels).map(key => [key, Number(row[key]) || 0])), vegetable_serving: Number(row.vegetable_serving) || 0, fruit_serving: Number(row.fruit_serving) || 0, dairy_serving: Number(row.dairy_serving) || 0, note: row.note || '', observed_in_images: [] })) };
-  $('#mealType').value = group.type; $('#captureStep').classList.add('hidden'); $('#reviewStep').classList.remove('hidden'); $('#photoDialogTitle').textContent = '修改餐點'; $('#reviewNotice').textContent = '修改後會更新這一餐的文字與營養紀錄。'; $('#addManualFoodBtn').classList.remove('hidden'); renderFoodEditor(); $('#photoDialog').showModal();
+async function loadFavorites() {
+  try { state.favorites = await callApi('list_favorites', { memberId: state.active.member_id }); renderDraftFoods(); } catch (error) { toast(error.message); }
 }
+function renderDraftFoods() {
+  let area = $('#draftFoods');
+  if (!area) { $('#analyzeBtn').insertAdjacentHTML('beforebegin', '<div id="draftFoods"></div>'); area = $('#draftFoods'); }
+  area.innerHTML = `${state.favorites.length ? `<div class="favorites"><b>我的最愛</b>${state.favorites.map(item => `<button type="button" data-favorite="${item.favorite_id}">☆ ${escapeHtml(item.food.name)}</button>`).join('')}</div>` : ''}${state.draftFoods.length ? `<div class="notice"><b>已加入這一餐</b><p>${state.draftFoods.map(food => escapeHtml(food.name)).join('、')}</p></div>` : ''}`;
+  area.querySelectorAll('[data-favorite]').forEach(button => button.onclick = () => { const item = state.favorites.find(value => value.favorite_id === button.dataset.favorite); state.draftFoods.push(structuredClone(item.food)); renderDraftFoods(); });
+}
+
+function editMeal(group) {
+  state.manualEntry = true;
+  state.editRecordId = group.id;
+  state.files = [];
+  state.analysis = { foods: group.foods.map(row => ({
+    name: row.food_name, quantity: Number(row.quantity) || 1,
+    estimated_total_weight_g: Number(row.estimated_weight_g), confidence: Number(row.confidence) || 1,
+    nutrients: Object.fromEntries(Object.keys(nutrientLabels).map(key => [key, Number(row[key]) || 0])),
+    vegetable_serving: Number(row.vegetable_serving) || 0, fruit_serving: Number(row.fruit_serving) || 0,
+    dairy_serving: Number(row.dairy_serving) || 0, note: row.note || '', observed_in_images: [],
+  })) };
+  $('#mealType').value = group.type;
+  $('#captureStep').classList.add('hidden');
+  $('#reviewStep').classList.remove('hidden');
+  $('#photoDialogTitle').textContent = '修改餐點';
+  $('#reviewNotice').textContent = '修改後會更新這一餐的文字與營養紀錄。';
+  $('#addManualFoodBtn').classList.remove('hidden');
+  renderFoodEditor();
+  $('#photoDialog').showModal();
+}
+
 async function deleteMeal(recordId) {
   if (!confirm('確定刪除這一整餐嗎？此動作無法復原。')) return;
-  try { await callApi('delete_meal', { memberId: state.active.member_id, recordId }); await refreshHome(); toast('餐點已刪除'); } catch (error) { toast(error.message); }
+  try {
+    await callApi('delete_meal', { memberId: state.active.member_id, recordId });
+    await refreshHome();
+    toast('餐點已刪除');
+  } catch (error) { toast(error.message); }
 }
 
 function emptyManualFood() {
@@ -240,18 +289,14 @@ async function compressImage(file) {
 }
 
 async function analyzePhotos() {
-  if (!state.files.length) return toast('請先拍攝或選擇至少一張照片');
+  if (!state.files.length && !state.draftFoods.length) return toast('請先加入照片、手動食物或最愛');
   const button = $('#analyzeBtn');
   button.disabled = true;
   button.textContent = '壓縮並分析中…';
   try {
-    const images = [];
-    for (const file of state.files) images.push(await compressImage(file));
-    state.analysis = await callApi('analyze_food', { images });
-    if (!state.analysis.is_food_image) {
-      toast(state.analysis.reason || '無法可靠辨識食物');
-      return;
-    }
+    let photoFoods = [];
+    if (state.files.length) { const images = []; for (const file of state.files) images.push(await compressImage(file)); const result = await callApi('analyze_food', { images }); if (!result.is_food_image) { toast(result.reason || '無法可靠辨識食物'); return; } photoFoods = result.foods; }
+    state.analysis = { foods: [...photoFoods, ...state.draftFoods] };
     renderFoodEditor();
     $('#captureStep').classList.add('hidden');
     $('#reviewStep').classList.remove('hidden');
@@ -262,6 +307,7 @@ async function analyzePhotos() {
 function renderFoodEditor() {
   if (state.manualEntry) {
     $('#foodEditor').innerHTML = state.analysis.foods.map((food, index) => `<div class="food-card" data-index="${index}"><div class="dialog-head"><b>食物 ${index + 1}</b>${state.analysis.foods.length > 1 ? `<button type="button" data-remove="${index}">刪除</button>` : ''}</div><label>食物名稱或份量描述<input data-key="name" maxlength="100" placeholder="例如：雞腿便當一個、無糖豆漿一杯" value="${escapeHtml(food.name)}"></label><div class="two"><label>重量 g（選填）<input type="number" min="0.1" step="0.1" data-optional="estimated_total_weight_g" value="${Number(food.estimated_total_weight_g) > 0 ? food.estimated_total_weight_g : ''}"></label><label>熱量 kcal（選填）<input type="number" min="0" step="1" data-optional-calories value="${Number(food.nutrients && food.nutrients.calories) > 0 ? food.nutrients.calories : ''}"></label></div></div>`).join('');
+    document.querySelectorAll('.food-card').forEach(card => card.insertAdjacentHTML('beforeend', '<label class="favorite-check"><input type="checkbox" data-save-favorite> 加入我的最愛</label>'));
     document.querySelectorAll('[data-remove]').forEach(button => button.onclick = () => { state.analysis.foods.splice(Number(button.dataset.remove), 1); renderFoodEditor(); });
     return;
   }
@@ -280,6 +326,7 @@ function editedFoods() {
     card.querySelectorAll('[data-optional]').forEach(input => food[input.dataset.optional] = input.value ? Number(input.value) : null);
     const calories = card.querySelector('[data-optional-calories]');
     if (calories) food.nutrients.calories = calories.value ? Number(calories.value) : null;
+    food.save_favorite = Boolean(card.querySelector('[data-save-favorite]:checked'));
     return food;
   });
 }
@@ -290,10 +337,19 @@ async function saveMeal() {
     let foods = editedFoods();
     if (foods.some(food => !String(food.name).trim())) throw new Error('請填寫每一項食物名稱');
     button.disabled = true;
-    if (state.manualEntry) {
-      button.textContent = 'AI 正在估算並保存…';
+    if (state.manualEntry && !state.editRecordId) {
+      button.textContent = 'AI 正在估算並加入…';
+      const favoriteFlags = foods.map(food => food.save_favorite);
       const result = await callApi('analyze_manual_food', { foods: foods.map(food => ({ name: food.name, estimated_weight_g: food.estimated_total_weight_g, calories: food.nutrients.calories })) });
       foods = result.foods;
+      const favorites = foods.filter((food, index) => favoriteFlags[index]);
+      if (favorites.length) await callApi('save_favorites', { memberId: state.active.member_id, foods: favorites });
+      state.draftFoods.push(...foods);
+      state.manualEntry = false; state.analysis = null;
+      $('#captureStep').classList.remove('hidden'); $('#reviewStep').classList.add('hidden'); $('#photoDialogTitle').textContent = '新增餐點';
+      await loadFavorites(); renderDraftFoods();
+      toast('已加入餐點草稿，最後再確認整餐');
+      return;
     }
     const meal = { date: $('#historyDate').value || today(), time: new Date().toTimeString().slice(0, 5), meal_type: $('#mealType').value, foods };
     await callApi(state.editRecordId ? 'update_meal' : 'save_meal', { memberId: state.active.member_id, recordId: state.editRecordId, meal });
@@ -311,6 +367,7 @@ function discardMealDraft() {
   state.files = [];
   state.analysis = null;
   state.editRecordId = '';
+  state.draftFoods = [];
   $('#previews').innerHTML = '';
   $('#photos').value = '';
   $('#cameraPhotos').value = '';
@@ -364,13 +421,16 @@ function openDailyLog() {
 }
 
 function showInfo(title, html) { $('#infoTitle').textContent = title; $('#infoBody').innerHTML = html; $('#infoDialog').showModal(); }
+function attachPasswordToggles(root = document) { root.querySelectorAll('input[type="password"]:not([data-eye-ready])').forEach(input => { input.dataset.eyeReady = 'true'; const button = document.createElement('button'); button.type = 'button'; button.className = 'password-eye'; button.textContent = '👁'; input.insertAdjacentElement('afterend', button); button.onclick = () => { const show = input.type === 'password'; input.type = show ? 'text' : 'password'; button.textContent = show ? '🙈' : '👁'; }; }); }
 function showLogin(member) {
   showInfo(member.needs_password ? '設定登入密碼' : `登入 ${member.name}`, `<form id="loginForm"><p class="muted">${member.needs_password ? '這是舊人物資料，請設定至少 6 個字元的密碼。' : '此瀏覽器登入一次後會記住。'}</p><label>密碼<input name="password" type="password" minlength="6" required autocomplete="current-password"></label><button class="primary">${member.needs_password ? '設定並登入' : '登入'}</button></form>`);
+  attachPasswordToggles($('#loginForm'));
   $('#loginForm').onsubmit = async event => { event.preventDefault(); const password = new FormData(event.currentTarget).get('password'); try { const result = await callApi('login', { memberId: member.member_id, password }); localStorage.setItem(`nutritionAuth:${member.member_id}`, result.auth_token); member.needs_password = false; $('#infoDialog').close(); await selectMember(member.member_id); } catch (error) { toast(error.message); } };
 }
 function showAccountSettings() {
   if (!state.active) return showInfo('帳號管理', '<p>請先選擇一位家庭成員。</p>');
   showInfo('帳號管理', `<p>目前人物：<b>${escapeHtml(state.active.name)}</b></p><p class="muted">刪除後，專屬 Google Sheet 會移到雲端硬碟垃圾桶。</p><form id="deleteAccountForm"><label>輸入密碼確認刪除<input name="password" type="password" minlength="6" required></label><button class="danger">刪除我的人物帳號</button></form>`);
+  attachPasswordToggles($('#deleteAccountForm'));
   $('#deleteAccountForm').onsubmit = async event => { event.preventDefault(); if (!confirm(`確定刪除 ${state.active.name} 的全部資料嗎？`)) return; const password = new FormData(event.currentTarget).get('password'); try { const id = state.active.member_id; await callApi('delete_account', { memberId: id, password }); localStorage.removeItem(`nutritionAuth:${id}`); state.active = null; $('#infoDialog').close(); $('#homeView').classList.add('hidden'); $('#membersView').classList.remove('hidden'); await loadMembers(); toast('人物帳號已刪除'); } catch (error) { toast(error.message); } };
 }
 function renderList(items) { return items && items.length ? `<ul>${items.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>` : '<p class="muted">目前沒有足夠資料。</p>'; }
@@ -396,7 +456,13 @@ $('#weeklyBtn').onclick = showWeekly;
 $('#logBtn').onclick = openDailyLog;
 $('#historyDate').onchange = loadMeals;
 document.querySelectorAll('[name=is_child]').forEach(input => input.onchange = toggleChildFields);
-$('#avatarPhoto').onchange = async event => { const file = event.target.files[0]; if (!file) return; try { state.customAvatar = await compressAvatar(file); showCustomAvatar(); } catch (error) { toast('無法處理這張圖片'); } event.target.value = ''; };
+$('#avatarPhoto').onchange = async event => {
+  const file = event.target.files[0];
+  if (!file) return;
+  try { state.customAvatar = await compressAvatar(file); showCustomAvatar(); }
+  catch (error) { toast('無法處理這張圖片'); }
+  event.target.value = '';
+};
 $('#avatars').onchange = () => { state.customAvatar = ''; showCustomAvatar(); };
 document.querySelectorAll('[data-close]').forEach(button => button.onclick = () => { const dialog = button.closest('dialog'); if (dialog.id === 'photoDialog') closeMealDialogOrGoBack(dialog); else dialog.close(); });
 
@@ -407,3 +473,5 @@ const summaryThird = $('#vegetables').closest('article'); summaryThird.querySele
 $('#logBtn').textContent = '飲水／步數';
 const home = $('#homeView'); const panels = home.querySelectorAll('.panel'); const summary = home.querySelector('.summary'); home.insertBefore(panels[0], summary); home.insertBefore(panels[1], summary);
 loadMembers();
+
+

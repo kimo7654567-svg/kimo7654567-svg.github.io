@@ -5,6 +5,7 @@ const MEMBER_HEADERS = ['member_id', 'name', 'is_child', 'avatar_id', 'spreadshe
 const PROFILE_HEADERS = ['member_id', 'name', 'birthday', 'sex', 'height_cm', 'weight_kg', 'activity_level', 'usual_daily_steps', 'goal', 'is_child', 'allergy', 'avatar_id', 'created_at', 'updated_at'];
 const MEAL_HEADERS = ['record_id', 'food_item_id', 'date', 'time', 'meal_type', 'food_name', 'quantity', 'estimated_weight_g', 'calories', 'protein_g', 'fat_g', 'carbohydrate_g', 'fiber_g', 'sodium_mg', 'calcium_mg', 'iron_mg', 'zinc_mg', 'vitamin_a_ug', 'vitamin_c_mg', 'vitamin_d_ug', 'omega3_mg', 'vegetable_serving', 'fruit_serving', 'dairy_serving', 'confidence', 'note', 'created_at'];
 const DAILY_LOG_HEADERS = ['date', 'water_ml', 'steps', 'weight_kg', 'updated_at'];
+const FAVORITE_HEADERS = ['favorite_id', 'food_name', 'food_json', 'updated_at'];
 const DAILY_SUMMARY_HEADERS = ['date', 'calories', 'protein_g', 'fat_g', 'carbohydrate_g', 'fiber_g', 'sodium_mg', 'calcium_mg', 'iron_mg', 'zinc_mg', 'vitamin_a_ug', 'vitamin_c_mg', 'vitamin_d_ug', 'omega3_mg', 'vegetable_serving', 'fruit_serving', 'dairy_serving', 'water_ml', 'steps', 'feedback', 'updated_at'];
 const WEEKLY_SUMMARY_HEADERS = ['week_start', 'week_end', 'recorded_days', 'average_calories', 'average_protein_g', 'average_fiber_g', 'average_sodium_mg', 'average_calcium_mg', 'average_iron_mg', 'average_zinc_mg', 'average_vitamin_a_ug', 'average_vitamin_c_mg', 'average_vitamin_d_ug', 'average_omega3_mg', 'average_vegetable_serving', 'average_fruit_serving', 'average_dairy_serving', 'weight_change_kg', 'feedback', 'updated_at'];
 const NUTRIENT_KEYS = ['calories', 'protein_g', 'fat_g', 'carbohydrate_g', 'fiber_g', 'sodium_mg', 'calcium_mg', 'iron_mg', 'zinc_mg', 'vitamin_a_ug', 'vitamin_c_mg', 'vitamin_d_ug', 'omega3_mg'];
@@ -49,6 +50,9 @@ function routeRequest(body) {
     case 'weekly_summary': return getWeeklySummary(body.memberId, body.weekStart);
     case 'nutrition_advice': return getNutritionAdvice(body.memberId, body.date);
     case 'save_daily_log': return saveDailyLog(body.memberId, body.log);
+    case 'list_favorites': return listFavorites(body.memberId);
+    case 'save_favorites': return saveFavorites(body.memberId, body.foods);
+    case 'delete_favorite': return deleteFavorite(body.memberId, body.favoriteId);
     default: throw new Error('不支援的操作');
   }
 }
@@ -229,6 +233,10 @@ function saveDailyLog(memberId, log) {
   return row;
 }
 
+function listFavorites(memberId) { const sheet = ensureSheet(getMemberContext(memberId).book, 'Favorites', FAVORITE_HEADERS); return rowsAsObjects(sheet).map(row => ({ favorite_id: String(row.favorite_id), food: JSON.parse(String(row.food_json)) })); }
+function saveFavorites(memberId, foods) { if (!Array.isArray(foods) || !foods.length) return []; const sheet = ensureSheet(getMemberContext(memberId).book, 'Favorites', FAVORITE_HEADERS); const existing = rowsAsObjects(sheet); const saved = []; foods.forEach(food => { validateFood(food); const name = requireText(food.name, '食物名稱', 100); const found = existing.find(row => String(row.food_name) === name); const row = { favorite_id: found ? found.favorite_id : Utilities.getUuid(), food_name: name, food_json: JSON.stringify(food), updated_at: new Date().toISOString() }; upsertByKeys(sheet, FAVORITE_HEADERS, row, ['food_name']); saved.push(row.favorite_id); }); return saved; }
+function deleteFavorite(memberId, favoriteId) { const sheet = ensureSheet(getMemberContext(memberId).book, 'Favorites', FAVORITE_HEADERS); const rows = rowsAsObjects(sheet); const index = rows.findIndex(row => String(row.favorite_id) === String(favoriteId)); if (index < 0) throw new Error('找不到最愛食物'); sheet.deleteRow(index + 2); return { deleted: true }; }
+
 function getDailySummary(memberId, date) {
   requireDate(date, '日期');
   const context = getMemberContext(memberId);
@@ -367,6 +375,7 @@ function initializeMemberBook(book) {
   ensureSheet(book, 'DailyLog', DAILY_LOG_HEADERS);
   ensureSheet(book, 'DailySummary', DAILY_SUMMARY_HEADERS);
   ensureSheet(book, 'WeeklySummary', WEEKLY_SUMMARY_HEADERS);
+  ensureSheet(book, 'Favorites', FAVORITE_HEADERS);
 }
 
 function ensureSheet(book, name, headers) {
