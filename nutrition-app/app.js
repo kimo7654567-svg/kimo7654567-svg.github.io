@@ -378,6 +378,12 @@ async function saveMeal() {
       setAnalysisStatus('草稿已加入，正在估算營養，完成後即可開始分析。');
       toast('已加入餐點草稿，正在估算營養');
       const favoriteFlags = foods.map(food => food.save_favorite);
+      const initialFavorites = foods.filter((food, index) => favoriteFlags[index]);
+      if (initialFavorites.length) {
+        await callApi('save_favorites', { memberId: state.active.member_id, foods: initialFavorites });
+        await loadFavorites();
+        setAnalysisStatus('已儲存我的最愛，正在估算草稿營養。');
+      }
       const result = await callApi('analyze_manual_food', { foods: foods.map(food => ({ name: food.name, estimated_weight_g: food.estimated_total_weight_g, calories: food.nutrients.calories })) });
       foods = result.foods;
       const favorites = foods.filter((food, index) => favoriteFlags[index]);

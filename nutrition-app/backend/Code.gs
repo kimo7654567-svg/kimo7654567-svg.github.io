@@ -1,6 +1,6 @@
 /** 日日好食 Cloud API — Google Apps Script */
 
-const API_VERSION = '1.2.0-diagnostics';
+const API_VERSION = '1.3.0-favorites';
 const MEMBER_HEADERS = ['member_id', 'name', 'is_child', 'avatar_id', 'spreadsheet_id', 'password_salt', 'password_hash', 'auth_version', 'created_at'];
 const PROFILE_HEADERS = ['member_id', 'name', 'birthday', 'sex', 'height_cm', 'weight_kg', 'activity_level', 'usual_daily_steps', 'goal', 'is_child', 'allergy', 'avatar_id', 'created_at', 'updated_at'];
 const MEAL_HEADERS = ['record_id', 'food_item_id', 'date', 'time', 'meal_type', 'food_name', 'quantity', 'estimated_weight_g', 'calories', 'protein_g', 'fat_g', 'carbohydrate_g', 'fiber_g', 'sodium_mg', 'calcium_mg', 'iron_mg', 'zinc_mg', 'vitamin_a_ug', 'vitamin_c_mg', 'vitamin_d_ug', 'omega3_mg', 'vegetable_serving', 'fruit_serving', 'dairy_serving', 'confidence', 'note', 'created_at'];
@@ -232,7 +232,7 @@ function saveDailyLog(memberId, log) {
 }
 
 function listFavorites(memberId) { const sheet = ensureSheet(getMemberContext(memberId).book, 'Favorites', FAVORITE_HEADERS); return rowsAsObjects(sheet).map(row => ({ favorite_id: String(row.favorite_id), food: JSON.parse(String(row.food_json)) })); }
-function saveFavorites(memberId, foods) { if (!Array.isArray(foods) || !foods.length) return []; const sheet = ensureSheet(getMemberContext(memberId).book, 'Favorites', FAVORITE_HEADERS); const existing = rowsAsObjects(sheet); const saved = []; foods.forEach(food => { validateFood(food); const name = requireText(food.name, '食物名稱', 100); const found = existing.find(row => String(row.food_name) === name); const row = { favorite_id: found ? found.favorite_id : Utilities.getUuid(), food_name: name, food_json: JSON.stringify(food), updated_at: new Date().toISOString() }; upsertByKeys(sheet, FAVORITE_HEADERS, row, ['food_name']); saved.push(row.favorite_id); }); return saved; }
+function saveFavorites(memberId, foods) { if (!Array.isArray(foods) || !foods.length) return []; const sheet = ensureSheet(getMemberContext(memberId).book, 'Favorites', FAVORITE_HEADERS); const existing = rowsAsObjects(sheet); const saved = []; foods.forEach(food => { const name = requireText(food && food.name, '食物名稱', 100); const found = existing.find(row => String(row.food_name) === name); const row = { favorite_id: found ? found.favorite_id : Utilities.getUuid(), food_name: name, food_json: JSON.stringify(food), updated_at: new Date().toISOString() }; upsertByKeys(sheet, FAVORITE_HEADERS, row, ['food_name']); saved.push(row.favorite_id); }); return saved; }
 function deleteFavorite(memberId, favoriteId) { const sheet = ensureSheet(getMemberContext(memberId).book, 'Favorites', FAVORITE_HEADERS); const rows = rowsAsObjects(sheet); const index = rows.findIndex(row => String(row.favorite_id) === String(favoriteId)); if (index < 0) throw new Error('找不到最愛食物'); sheet.deleteRow(index + 2); return { deleted: true }; }
 
 function getDailySummary(memberId, date) {
