@@ -1,6 +1,6 @@
 /** 日日好食 Cloud API — Google Apps Script */
 
-const API_VERSION = '1.3.0-favorites';
+const API_VERSION = '1.3.1-gemini-schema';
 const MEMBER_HEADERS = ['member_id', 'name', 'is_child', 'avatar_id', 'spreadsheet_id', 'password_salt', 'password_hash', 'auth_version', 'created_at'];
 const PROFILE_HEADERS = ['member_id', 'name', 'birthday', 'sex', 'height_cm', 'weight_kg', 'activity_level', 'usual_daily_steps', 'goal', 'is_child', 'allergy', 'avatar_id', 'created_at', 'updated_at'];
 const MEAL_HEADERS = ['record_id', 'food_item_id', 'date', 'time', 'meal_type', 'food_name', 'quantity', 'estimated_weight_g', 'calories', 'protein_g', 'fat_g', 'carbohydrate_g', 'fiber_g', 'sodium_mg', 'calcium_mg', 'iron_mg', 'zinc_mg', 'vitamin_a_ug', 'vitamin_c_mg', 'vitamin_d_ug', 'omega3_mg', 'vegetable_serving', 'fruit_serving', 'dairy_serving', 'confidence', 'note', 'created_at'];
@@ -474,9 +474,9 @@ function foodAnalysisSchema() {
   NUTRIENT_KEYS.forEach(key => nutrients[key] = number);
   return { type: 'object', properties: {
     is_food_image: { type: 'boolean' }, image_confidence: { type: 'number', minimum: 0, maximum: 1 },
-    reason: { type: ['string', 'null'] }, foods: { type: 'array', maxItems: 30, items: { type: 'object', properties: {
+    reason: { type: 'string', nullable: true }, foods: { type: 'array', maxItems: 30, items: { type: 'object', properties: {
       name: { type: 'string' }, quantity: { type: 'integer', minimum: 1 }, estimated_total_weight_g: { type: 'number', minimum: 0 },
-      confidence: { type: 'number', minimum: 0, maximum: 1 }, note: { type: ['string', 'null'] },
+      confidence: { type: 'number', minimum: 0, maximum: 1 }, note: { type: 'string', nullable: true },
       observed_in_images: { type: 'array', items: { type: 'integer', minimum: 1 } }, nutrients: { type: 'object', properties: nutrients, required: NUTRIENT_KEYS },
       vegetable_serving: number, fruit_serving: number, dairy_serving: number,
     }, required: ['name', 'quantity', 'estimated_total_weight_g', 'confidence', 'note', 'observed_in_images', 'nutrients', 'vegetable_serving', 'fruit_serving', 'dairy_serving'] } },
