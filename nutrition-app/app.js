@@ -188,6 +188,7 @@ function openPhotoDialog() {
   $('#reviewNotice').textContent = '以下皆為照片估算值。請確認並修改後再保存。';
   $('#addManualFoodBtn').classList.add('hidden');
   $('#saveMealBtn').textContent = '確認並保存這一餐';
+  $('#analyzeBtn').textContent = '餐點輸入完畢，開始分析記錄';
   $('#photos').value = '';
   $('#cameraPhotos').value = '';
   renderPreviews();
@@ -201,8 +202,9 @@ async function loadFavorites() {
 function renderDraftFoods() {
   let area = $('#draftFoods');
   if (!area) { $('#analyzeBtn').insertAdjacentHTML('beforebegin', '<div id="draftFoods"></div>'); area = $('#draftFoods'); }
-  area.innerHTML = `${state.favorites.length ? `<div class="favorites"><b>我的最愛</b>${state.favorites.map(item => `<button type="button" data-favorite="${item.favorite_id}">☆ ${escapeHtml(item.food.name)}</button>`).join('')}</div>` : ''}${state.draftFoods.length ? `<div class="notice"><b>已加入這一餐</b><p>${state.draftFoods.map(food => escapeHtml(food.name)).join('、')}</p></div>` : ''}`;
+  area.innerHTML = `${state.favorites.length ? `<div class="favorites"><b>我的最愛</b>${state.favorites.map(item => `<button type="button" data-favorite="${item.favorite_id}">☆ ${escapeHtml(item.food.name)}</button>`).join('')}</div>` : ''}${state.draftFoods.length ? `<div class="draft-list"><b>手動／最愛食物</b>${state.draftFoods.map((food, index) => `<div class="draft-food"><div><strong>${escapeHtml(food.name)}</strong><small>${Math.round(Number(food.estimated_total_weight_g) || 0)} g｜${Math.round(Number(food.nutrients && food.nutrients.calories) || 0)} kcal</small></div><button type="button" data-remove-draft="${index}">刪除</button></div>`).join('')}</div>` : '<p class="muted">尚未加入手動食物；已選照片會顯示在上方。</p>'}`;
   area.querySelectorAll('[data-favorite]').forEach(button => button.onclick = () => { const item = state.favorites.find(value => value.favorite_id === button.dataset.favorite); state.draftFoods.push(structuredClone(item.food)); renderDraftFoods(); });
+  area.querySelectorAll('[data-remove-draft]').forEach(button => button.onclick = () => { state.draftFoods.splice(Number(button.dataset.removeDraft), 1); renderDraftFoods(); });
 }
 
 function editMeal(group) {
@@ -302,13 +304,13 @@ async function analyzePhotos() {
     $('#captureStep').classList.add('hidden');
     $('#reviewStep').classList.remove('hidden');
   } catch (error) { toast(error.message); }
-  finally { button.disabled = false; button.textContent = '分析這一餐'; }
+  finally { button.disabled = false; button.textContent = '餐點輸入完畢，開始分析記錄'; }
 }
 
 function renderFoodEditor() {
   if (state.manualEntry) {
     $('#foodEditor').innerHTML = state.analysis.foods.map((food, index) => `<div class="food-card" data-index="${index}"><div class="dialog-head"><b>食物 ${index + 1}</b>${state.analysis.foods.length > 1 ? `<button type="button" data-remove="${index}">刪除</button>` : ''}</div><label>食物名稱或份量描述<input data-key="name" maxlength="100" placeholder="例如：雞腿便當一個、無糖豆漿一杯" value="${escapeHtml(food.name)}"></label><div class="two"><label>重量 g（選填）<input type="number" min="0.1" step="0.1" data-optional="estimated_total_weight_g" value="${Number(food.estimated_total_weight_g) > 0 ? food.estimated_total_weight_g : ''}"></label><label>熱量 kcal（選填）<input type="number" min="0" step="1" data-optional-calories value="${Number(food.nutrients && food.nutrients.calories) > 0 ? food.nutrients.calories : ''}"></label></div></div>`).join('');
-    document.querySelectorAll('.food-card').forEach(card => card.insertAdjacentHTML('beforeend', '<label class="favorite-check"><input type="checkbox" data-save-favorite> 加入我的最愛</label>'));
+    document.querySelectorAll('.food-card').forEach((card, index) => { card.insertAdjacentHTML('beforeend', '<label class="favorite-check"><input type="checkbox" data-save-favorite> 加入我的最愛</label>'); card.querySelector('[data-save-favorite]').checked = Boolean(state.analysis.foods[index].save_favorite); });
     document.querySelectorAll('[data-remove]').forEach(button => button.onclick = () => { state.analysis.foods.splice(Number(button.dataset.remove), 1); renderFoodEditor(); });
     return;
   }
@@ -346,8 +348,7 @@ async function saveMeal() {
       const favorites = foods.filter((food, index) => favoriteFlags[index]);
       if (favorites.length) await callApi('save_favorites', { memberId: state.active.member_id, foods: favorites });
       state.draftFoods.push(...foods);
-      state.manualEntry = false; state.analysis = null;
-      $('#captureStep').classList.remove('hidden'); $('#reviewStep').classList.add('hidden'); $('#photoDialogTitle').textContent = '新增餐點';
+      showMealDraft();
       await loadFavorites(); renderDraftFoods();
       toast('已加入餐點草稿，最後再確認整餐');
       return;
@@ -362,6 +363,13 @@ async function saveMeal() {
     toast(state.editRecordId ? '餐點已更新' : '已保存文字紀錄，照片未保存');
   } catch (error) { toast(error.message); }
   finally { button.disabled = false; button.textContent = '確認並保存這一餐'; }
+}
+
+function showMealDraft() {
+  state.manualEntry = false; state.analysis = null;
+  $('#captureStep').classList.remove('hidden'); $('#reviewStep').classList.add('hidden'); $('#photoDialogTitle').textContent = '新增餐點';
+  $('#analyzeBtn').textContent = '餐點輸入完畢，開始分析記錄';
+  renderPreviews(); renderDraftFoods();
 }
 
 function discardMealDraft() {

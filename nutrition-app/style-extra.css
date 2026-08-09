@@ -32,3 +32,8 @@ h1, h2, h3 { font-family: Georgia, "Noto Serif TC", serif; letter-spacing: .04em
 .favorite-check input { display: inline-block; width: auto; margin-right: 6px; }
 .favorites { margin: 14px 0; padding: 12px; border: 1px solid var(--line); border-radius: 14px; }
 .favorites button { display: inline-block; width: auto; margin: 7px 6px 0 0; border: 1px solid var(--line); border-radius: 999px; padding: 7px 10px; background: white; }
+.draft-list { margin: 14px 0; padding: 12px; background: #f4efe3; border: 1px solid var(--line); border-radius: 14px; }
+.draft-food { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.draft-food:first-of-type { margin-top: 8px; }
+.draft-food small { display: block; color: var(--muted); }
+.draft-food button { border: 1px solid var(--line); border-radius: 9px; padding: 6px 9px; background: white; }
