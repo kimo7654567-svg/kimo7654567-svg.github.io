@@ -14,6 +14,17 @@ function toast(message) {
   setTimeout(() => element.classList.remove('show'), 2800);
 }
 
+function setAnalysisStatus(message = '', isError = false) {
+  let status = $('#analysisStatus');
+  if (!status) {
+    $('#analyzeBtn').insertAdjacentHTML('beforebegin', '<p id="analysisStatus" class="notice hidden" role="status"></p>');
+    status = $('#analysisStatus');
+  }
+  status.textContent = message;
+  status.classList.toggle('hidden', !message);
+  status.style.color = isError ? '#934b3f' : '';
+}
+
 async function loadMembers() {
   try {
     state.members = await callApi('list_members');
@@ -190,6 +201,7 @@ function openPhotoDialog() {
   $('#addManualFoodBtn').classList.add('hidden');
   $('#saveMealBtn').textContent = '確認並保存這一餐';
   $('#analyzeBtn').textContent = '餐點輸入完畢，開始分析記錄';
+  setAnalysisStatus();
   $('#photos').value = '';
   $('#cameraPhotos').value = '';
   renderPreviews();
@@ -308,19 +320,24 @@ async function compressImage(file) {
 }
 
 async function analyzePhotos() {
-  if (!state.files.length && !state.draftFoods.length) return toast('請先加入照片、手動食物或最愛');
+  if (!state.files.length && !state.draftFoods.length) {
+    setAnalysisStatus('請先加入照片、手動食物或最愛', true);
+    return toast('請先加入照片、手動食物或最愛');
+  }
   const button = $('#analyzeBtn');
   button.disabled = true;
   button.textContent = '壓縮並分析中…';
+  setAnalysisStatus('正在分析餐點，請稍候…');
   try {
     let photoFoods = [];
-    if (state.files.length) { const images = []; for (const file of state.files) images.push(await compressImage(file)); const result = await callApi('analyze_food', { images }); if (!result.is_food_image) { toast(result.reason || '無法可靠辨識食物'); return; } photoFoods = result.foods; }
+    if (state.files.length) { const images = []; for (const file of state.files) images.push(await compressImage(file)); const result = await callApi('analyze_food', { images }); if (!result.is_food_image) { const message = result.reason || '無法可靠辨識食物'; setAnalysisStatus(message, true); toast(message); return; } photoFoods = result.foods; }
     state.analysis = { foods: [...photoFoods, ...state.draftFoods] };
+    $('#reviewNotice').textContent = '分析完成，請確認並修改後再保存。';
     $('#saveMealBtn').textContent = '確認並保存這一餐';
     renderFoodEditor();
     $('#captureStep').classList.add('hidden');
     $('#reviewStep').classList.remove('hidden');
-  } catch (error) { toast(error.message); }
+  } catch (error) { setAnalysisStatus(`分析失敗：${error.message}`, true); toast(error.message); }
   finally { button.disabled = false; button.textContent = '餐點輸入完畢，開始分析記錄'; }
 }
 
@@ -365,6 +382,8 @@ async function saveMeal() {
       else state.draftFoods.splice(state.draftEditIndex, 1, ...foods);
       showMealDraft();
       $('#analyzeBtn').disabled = true;
+      $('#analyzeBtn').textContent = '正在估算草稿營養…';
+      setAnalysisStatus('草稿已加入，正在估算營養，完成後即可開始分析。');
       toast('已加入餐點草稿，正在估算營養');
       const favoriteFlags = foods.map(food => food.save_favorite);
       const result = await callApi('analyze_manual_food', { foods: foods.map(food => ({ name: food.name, estimated_weight_g: food.estimated_total_weight_g, calories: food.nutrients.calories })) });
@@ -373,6 +392,7 @@ async function saveMeal() {
       if (favorites.length) await callApi('save_favorites', { memberId: state.active.member_id, foods: favorites });
       state.draftFoods.splice(draftStart, foods.length, ...foods);
       await loadFavorites(); renderDraftFoods();
+      setAnalysisStatus('草稿營養估算完成，可以開始分析。');
       toast('餐點草稿估算完成');
       return;
     }
@@ -384,10 +404,14 @@ async function saveMeal() {
     $('#photoDialog').close();
     await refreshHome();
     toast(state.editRecordId ? '餐點已更新' : '已保存文字紀錄，照片未保存');
-  } catch (error) { toast(error.message); }
+  } catch (error) {
+    if (!$('#captureStep').classList.contains('hidden')) setAnalysisStatus(`草稿營養估算失敗：${error.message}`, true);
+    toast(error.message);
+  }
   finally {
     button.disabled = false;
     $('#analyzeBtn').disabled = false;
+    $('#analyzeBtn').textContent = '餐點輸入完畢，開始分析記錄';
     button.textContent = state.editRecordId ? '儲存修改' : state.draftEditIndex != null ? '更新餐點草稿' : state.manualEntry ? '加入餐點草稿' : '確認並保存這一餐';
   }
 }
