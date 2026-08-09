@@ -1429,6 +1429,7 @@ async function renderHiraganaPractice() {
   if (!content) return;
   const char = HIRAGANA_FLAT[hiraganaState.currentIdx];
   const romaji = HIRAGANA_ROMAJI[char] || '';
+  const strokeGuide = HIRAGANA_STROKES[romaji] || { paths: [], labels: [] };
   const total = HIRAGANA_FLAT.length;
   const idx = hiraganaState.currentIdx;
 
@@ -1473,10 +1474,10 @@ async function renderHiraganaPractice() {
       <div class="hira-write-section">
         <div class="hira-write-label">練習書寫</div>
         <div class="hira-big-canvas-wrap">
-          <div class="hira-big-ghost">${char}</div>
-          <div class="hira-stroke-numbers">${(HIRAGANA_STROKE_NUMBERS[romaji] || []).map(item =>
-            `<span style="left:${item.x}%;top:${item.y}%">${item.n}</span>`
-          ).join('')}</div>
+          <svg class="hira-stroke-guide" viewBox="0 0 109 109" aria-label="${char} 的筆畫順序">
+            <g class="hira-guide-paths">${strokeGuide.paths.map(path => `<path d="${path}"></path>`).join('')}</g>
+            <g class="hira-guide-numbers">${strokeGuide.labels.map(item => `<text x="${item.x}" y="${item.y}">${item.n}</text>`).join('')}</g>
+          </svg>
           <canvas id="hiraBigCanvas" class="hira-big-canvas" width="280" height="280"></canvas>
         </div>
         <button class="hira-clear-btn" onclick="clearBigCanvas()">🗑 清除</button>
