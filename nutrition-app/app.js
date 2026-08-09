@@ -338,6 +338,8 @@ async function saveMeal() {
   const button = $('#saveMealBtn');
   try {
     let foods = editedFoods();
+    if (state.manualEntry && !state.editRecordId) foods = foods.filter(food => String(food.name).trim());
+    if (!foods.length) throw new Error('請至少填寫一項食物名稱');
     if (foods.some(food => !String(food.name).trim())) throw new Error('請填寫每一項食物名稱');
     button.disabled = true;
     if (state.manualEntry && !state.editRecordId) {
@@ -365,7 +367,11 @@ async function saveMeal() {
     await refreshHome();
     toast(state.editRecordId ? '餐點已更新' : '已保存文字紀錄，照片未保存');
   } catch (error) { toast(error.message); }
-  finally { button.disabled = false; $('#analyzeBtn').disabled = false; button.textContent = '確認並保存這一餐'; }
+  finally {
+    button.disabled = false;
+    $('#analyzeBtn').disabled = false;
+    button.textContent = state.editRecordId ? '儲存修改' : state.manualEntry ? '加入餐點草稿' : '確認並保存這一餐';
+  }
 }
 
 function showMealDraft() {
