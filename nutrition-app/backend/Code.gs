@@ -1,6 +1,6 @@
 /** 日日好食 Cloud API — Google Apps Script */
 
-const API_VERSION = '1.4.0-photo-description';
+const API_VERSION = '1.4.1-meal-date-edit';
 const MEMBER_HEADERS = ['member_id', 'name', 'is_child', 'avatar_id', 'spreadsheet_id', 'password_salt', 'password_hash', 'auth_version', 'created_at'];
 const PROFILE_HEADERS = ['member_id', 'name', 'birthday', 'sex', 'height_cm', 'weight_kg', 'activity_level', 'usual_daily_steps', 'goal', 'is_child', 'allergy', 'avatar_id', 'created_at', 'updated_at'];
 const MEAL_HEADERS = ['record_id', 'food_item_id', 'date', 'time', 'meal_type', 'food_name', 'quantity', 'estimated_weight_g', 'calories', 'protein_g', 'fat_g', 'carbohydrate_g', 'fiber_g', 'sodium_mg', 'calcium_mg', 'iron_mg', 'zinc_mg', 'vitamin_a_ug', 'vitamin_c_mg', 'vitamin_d_ug', 'omega3_mg', 'vegetable_serving', 'fruit_serving', 'dairy_serving', 'confidence', 'note', 'created_at'];
@@ -187,7 +187,8 @@ function saveMeal(memberId, meal) {
 function updateMeal(memberId, recordId, meal) {
   requireText(recordId, '餐點 ID', 100);
   validateMealInput(meal);
-  const existing = getMeals(memberId, meal.date).some(row => String(row.record_id) === String(recordId));
+  const sheet = getMemberContext(memberId).book.getSheetByName('Meals');
+  const existing = rowsAsObjects(sheet).some(row => String(row.record_id) === String(recordId));
   if (!existing) throw new Error('找不到要修改的餐點');
   deleteMeal(memberId, recordId);
   meal.record_id = recordId;

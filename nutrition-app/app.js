@@ -96,16 +96,14 @@ async function loadMeals() {
 
 function renderMealTimeline(rows) {
   const labels = { breakfast: '早餐', brunch: '早午餐', lunch: '午餐', dinner: '晚餐', snack: '點心' };
-  const displayTime = value => { const text = String(value || ''); if (/^\d{2}:\d{2}/.test(text)) return text.slice(0, 5); const date = new Date(text); return isNaN(date.getTime()) ? text : date.toLocaleTimeString('zh-TW', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit', hour12: false }); };
+  const mealOrder = { breakfast: 1, brunch: 2, lunch: 3, dinner: 4, snack: 5 };
   const groups = Object.values(rows.reduce((result, row) => {
     const id = String(row.record_id);
-    if (!result[id]) result[id] = { id, date: row.date || $('#historyDate').value, time: displayTime(row.time), type: row.meal_type, foods: [], calories: 0, protein: 0 };
+    if (!result[id]) result[id] = { id, date: row.date || $('#historyDate').value, type: row.meal_type, foods: [] };
     result[id].foods.push(row);
-    result[id].calories += Number(row.calories) || 0;
-    result[id].protein += Number(row.protein_g) || 0;
     return result;
-  }, {})).sort((a, b) => String(a.time).localeCompare(String(b.time)));
-  $('#mealList').innerHTML = groups.length ? groups.map(group => `<article class="meal-card"><div class="meal-head"><div><b>${labels[group.type] || escapeHtml(group.type)} ${escapeHtml(group.date || '')} ${escapeHtml(group.time || '')}</b><p>${group.foods.map(food => escapeHtml(food.food_name)).join('、')}</p><small>${Math.round(group.calories)} kcal｜蛋白質 ${Math.round(group.protein)} g</small></div><div><button data-edit-meal="${group.id}">修改</button><button data-delete-meal="${group.id}">刪除</button></div></div><details><summary>查看內容</summary>${group.foods.map(food => `<div class="food-row"><span>${escapeHtml(food.food_name)}</span><b>${Math.round(Number(food.estimated_weight_g))} g</b></div>`).join('')}</details></article>`).join('') : '<p class="muted">這一天還沒有紀錄。</p>';
+  }, {})).sort((a, b) => (mealOrder[a.type] || 99) - (mealOrder[b.type] || 99));
+  $('#mealList').innerHTML = groups.length ? groups.map(group => `<article class="meal-card"><div class="meal-head"><div><b>${labels[group.type] || escapeHtml(group.type)}</b>${group.foods.map(food => `<p>${escapeHtml(food.food_name)} ${Math.round(Number(food.calories) || 0)} 卡</p>`).join('')}</div><div><button data-edit-meal="${group.id}">修改</button><button data-delete-meal="${group.id}">刪除</button></div></div></article>`).join('') : '<p class="muted">這一天還沒有紀錄。</p>';
   document.querySelectorAll('[data-edit-meal]').forEach(button => button.onclick = () => editMeal(groups.find(group => group.id === button.dataset.editMeal)));
   document.querySelectorAll('[data-delete-meal]').forEach(button => button.onclick = () => deleteMeal(button.dataset.deleteMeal));
 }
@@ -191,17 +189,12 @@ $('#memberForm').onsubmit = async event => {
   }
 };
 
-function currentTaipeiTime() {
-  return new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit', hour12: false });
-}
-
-function prepareMealDateTime(date = today(), time = currentTaipeiTime()) {
+function prepareMealDate(date = today()) {
   if (!$('#mealDateTimeFields')) {
-    $('#mealType').closest('label').insertAdjacentHTML('afterend', '<div id="mealDateTimeFields" class="two"><label>餐點日期<input id="mealDate" type="date" required></label><label>餐點時間<input id="mealTime" type="time" required></label></div>');
+    $('#mealType').closest('label').insertAdjacentHTML('afterend', '<label id="mealDateTimeFields">餐點日期<input id="mealDate" type="date" required></label>');
   }
   $('#mealDate').max = today();
   $('#mealDate').value = date;
-  $('#mealTime').value = time;
 }
 
 function openPhotoDialog() {
@@ -211,7 +204,7 @@ function openPhotoDialog() {
   state.editRecordId = '';
   state.draftEditIndex = null;
   state.draftFoods = [];
-  prepareMealDateTime();
+  prepareMealDate();
   $('#captureStep').classList.remove('hidden');
   $('#reviewStep').classList.add('hidden');
   $('#photoDialogTitle').textContent = '新增餐點';
@@ -253,7 +246,7 @@ function editMeal(group) {
     dairy_serving: Number(row.dairy_serving) || 0, note: row.note || '', observed_in_images: [],
   })) };
   $('#mealType').value = group.type;
-  prepareMealDateTime(group.date || today(), group.time || currentTaipeiTime());
+  prepareMealDate(group.date || today());
   $('#captureStep').classList.add('hidden');
   $('#reviewStep').classList.remove('hidden');
   $('#photoDialogTitle').textContent = '修改餐點';
@@ -425,10 +418,9 @@ async function saveMeal() {
     }
     setSaveStatus('正在保存餐點，請稍候…');
     const mealDate = $('#mealDate').value;
-    const mealTime = $('#mealTime').value;
-    if (!mealDate || !mealTime) throw new Error('請選擇餐點日期和時間');
+    if (!mealDate) throw new Error('請選擇餐點日期');
     if (mealDate > today()) throw new Error('餐點日期不能晚於今天');
-    const meal = { date: mealDate, time: mealTime, meal_type: $('#mealType').value, foods };
+    const meal = { date: mealDate, time: '', meal_type: $('#mealType').value, foods };
     await callApi(state.editRecordId ? 'update_meal' : 'save_meal', { memberId: state.active.member_id, recordId: state.editRecordId, meal });
     state.files = [];
     state.analysis = null;
