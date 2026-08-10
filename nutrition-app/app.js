@@ -191,6 +191,19 @@ $('#memberForm').onsubmit = async event => {
   }
 };
 
+function currentTaipeiTime() {
+  return new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function prepareMealDateTime(date = today(), time = currentTaipeiTime()) {
+  if (!$('#mealDateTimeFields')) {
+    $('#mealType').closest('label').insertAdjacentHTML('afterend', '<div id="mealDateTimeFields" class="two"><label>餐點日期<input id="mealDate" type="date" required></label><label>餐點時間<input id="mealTime" type="time" required></label></div>');
+  }
+  $('#mealDate').max = today();
+  $('#mealDate').value = date;
+  $('#mealTime').value = time;
+}
+
 function openPhotoDialog() {
   state.manualEntry = false;
   state.files = [];
@@ -198,6 +211,7 @@ function openPhotoDialog() {
   state.editRecordId = '';
   state.draftEditIndex = null;
   state.draftFoods = [];
+  prepareMealDateTime();
   $('#captureStep').classList.remove('hidden');
   $('#reviewStep').classList.add('hidden');
   $('#photoDialogTitle').textContent = '新增餐點';
@@ -239,6 +253,7 @@ function editMeal(group) {
     dairy_serving: Number(row.dairy_serving) || 0, note: row.note || '', observed_in_images: [],
   })) };
   $('#mealType').value = group.type;
+  prepareMealDateTime(group.date || today(), group.time || currentTaipeiTime());
   $('#captureStep').classList.add('hidden');
   $('#reviewStep').classList.remove('hidden');
   $('#photoDialogTitle').textContent = '修改餐點';
@@ -409,12 +424,17 @@ async function saveMeal() {
       return;
     }
     setSaveStatus('正在保存餐點，請稍候…');
-    const meal = { date: $('#historyDate').value || today(), time: new Date().toTimeString().slice(0, 5), meal_type: $('#mealType').value, foods };
+    const mealDate = $('#mealDate').value;
+    const mealTime = $('#mealTime').value;
+    if (!mealDate || !mealTime) throw new Error('請選擇餐點日期和時間');
+    if (mealDate > today()) throw new Error('餐點日期不能晚於今天');
+    const meal = { date: mealDate, time: mealTime, meal_type: $('#mealType').value, foods };
     await callApi(state.editRecordId ? 'update_meal' : 'save_meal', { memberId: state.active.member_id, recordId: state.editRecordId, meal });
     state.files = [];
     state.analysis = null;
     $('#previews').innerHTML = '';
     $('#photoDialog').close();
+    $('#historyDate').value = meal.date;
     await refreshHome();
     toast(state.editRecordId ? '餐點已更新' : '已保存文字紀錄，照片未保存');
   } catch (error) {
