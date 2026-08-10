@@ -1013,50 +1013,6 @@ function selectStoryWords(allWords, level, isJa) {
   }).sort((a, b) => b.score - a.score).slice(0, target).map(x => x.w);
 }
 
-function validateBeginnerStory(data, level, mustWords) {
-  if (level !== 'L0.5' && level !== 'L1') return [];
-  const text = (data.sentences || []).join(' ');
-  const problems = [];
-  const forbidden = /\b(was|were|went|saw|did|had|came|made|took|gave|got|said|told|found|thought|knew|ran|ate|drank|slept|wrote|read|played|liked|wanted|walked|looked|will|would|could|should)\b/i;
-  if (forbidden.test(text) || /\b(am|is|are)\s+\w+ing\b/i.test(text)) problems.push('使用了非簡單現在式');
-  const lower = text.toLowerCase();
-  const missing = mustWords.filter(w => !lower.includes(String(w).toLowerCase()));
-  if (missing.length) problems.push(`缺少複習單字：${missing.join(', ')}`);
-  if (level === 'L0.5') {
-    const sentences = data.sentences || [];
-    if (sentences.length < 4 || sentences.length > 6) problems.push('句數不是 4–6 句');
-    if (sentences.some(s => s.replace(/[^A-Za-z' -]/g, '').trim().split(/\s+/).filter(Boolean).length > 8)) problems.push('有句子超過 8 個英文單字');
-  }
-  if (level === 'L1') {
-    const sentences = data.sentences || [];
-    const wordCounts = sentences.map(s => s.replace(/[^A-Za-z' -]/g, '').trim().split(/\s+/).filter(Boolean).length);
-    const totalWords = wordCounts.reduce((sum, count) => sum + count, 0);
-    if (sentences.length < 8 || sentences.length > 12) problems.push('句數不是 8–12 句');
-    if (totalWords < 80 || totalWords > 120) problems.push(`總字數是 ${totalWords}，需要 80–120 字`);
-    if (wordCounts.some(count => count < 7 || count > 12)) problems.push('每句需要約 7–12 個英文單字');
-  }
-  return problems;
-}
-
-function validateJapaneseStory(data, level, mustWords) {
-  const sentences = Array.isArray(data.sentences) ? data.sentences : [];
-  const text = sentences.join(' ');
-  const problems = [];
-  const missing = mustWords.filter(w => !text.includes(String(w)));
-  if (!sentences.length) problems.push('沒有可朗讀的句子');
-  if (missing.length) problems.push(`缺少複習單字：${missing.join('、')}`);
-  const withoutReadings = text.replace(/\[[ぁ-ゖァ-ヺー]+\]/g, '');
-  const characterCount = (withoutReadings.match(/[ぁ-ゖァ-ヺー\u3400-\u9FFF々]/g) || []).length;
-  if (level === 'L0.5') {
-    if (sentences.length < 4 || sentences.length > 6) problems.push('句數不是 4–6 句');
-    if (characterCount < 50 || characterCount > 80) problems.push(`字數是 ${characterCount}，需要 50–80 字`);
-    if (/[\u3400-\u9FFF々ァ-ヺA-Za-z]/.test(text)) problems.push('L0 故事包含漢字、片假名或英文字母');
-  }
-  if (level === 'L1' && (characterCount < 100 || characterCount > 150)) problems.push(`字數是 ${characterCount}，需要 100–150 字`);
-  if ((level === 'L2' || level === 'L3') && (characterCount < 150 || characterCount > 200)) problems.push(`字數是 ${characterCount}，需要 150–200 字`);
-  return problems;
-}
-
 function renderJapaneseRuby(text) {
   const source = String(text || '');
   const regex = /([\u3400-\u9FFF々]+)\[([ぁ-ゖァ-ヺー]+)\]/g;
@@ -1169,8 +1125,6 @@ async function generateStory() {
       must_words: mustWords
     });
 
-    const storyProblems = isJa ? validateJapaneseStory(data, storyState.level, mustWords) : validateBeginnerStory(data, storyState.level, mustWords);
-    if (storyProblems.length) throw new Error('故事難度不符合：' + storyProblems.join('；') + '。請重新生成。');
     const usedAt = Date.now();
     optimizedWords.forEach(w => { w.lastStoryUsed = usedAt; w.storyUseCount = (w.storyUseCount || 0) + 1; });
     save();
