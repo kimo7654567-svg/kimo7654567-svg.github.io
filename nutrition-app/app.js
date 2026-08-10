@@ -208,6 +208,8 @@ function openPhotoDialog() {
   setAnalysisStatus();
   $('#photos').value = '';
   $('#cameraPhotos').value = '';
+  if (!$('#mealDescription')) $('#previews').insertAdjacentHTML('afterend', '<label id="mealDescriptionRow" class="meal-description hidden">照片補充描述（選填）<textarea id="mealDescription" maxlength="500" rows="3" placeholder="例如：煎蛋沒有加油；或使用約 5 ml 橄欖油"></textarea><small>可補充烹調方式、用油量、醬料或照片看不出的資訊。</small></label>');
+  $('#mealDescription').value = '';
   renderPreviews();
   loadFavorites();
   $('#photoDialog').showModal();
@@ -305,6 +307,7 @@ function addFiles(fileList) {
 function renderPreviews() {
   $('#photoCount').textContent = `已選 ${state.files.length} / 6 張`;
   $('#previews').innerHTML = state.files.map((file, index) => `<div class="preview"><img src="${URL.createObjectURL(file)}" alt="照片 ${index + 1}"><button data-index="${index}">×</button></div>`).join('');
+  if ($('#mealDescriptionRow')) $('#mealDescriptionRow').classList.toggle('hidden', !state.files.length);
   document.querySelectorAll('.preview button').forEach(button => button.onclick = () => {
     state.files.splice(Number(button.dataset.index), 1);
     renderPreviews();
@@ -335,7 +338,7 @@ async function analyzePhotos() {
   try {
     let photoFoods = [];
     let draftFoods = [];
-    if (state.files.length) { const images = []; for (const file of state.files) images.push(await compressImage(file)); const result = await callApi('analyze_food', { images }); if (!result.is_food_image) { const message = result.reason || '無法可靠辨識食物'; setAnalysisStatus(message, true); toast(message); return; } photoFoods = result.foods; }
+    if (state.files.length) { const images = []; for (const file of state.files) images.push(await compressImage(file)); const result = await callApi('analyze_food', { images, description: $('#mealDescription') ? $('#mealDescription').value.trim() : '' }); if (!result.is_food_image) { const message = result.reason || '無法可靠辨識食物'; setAnalysisStatus(message, true); toast(message); return; } photoFoods = result.foods; }
     if (state.draftFoods.length) {
       const favoriteFlags = state.draftFoods.map(food => food.save_favorite);
       const result = await callApi('analyze_manual_food', { foods: state.draftFoods.map(food => ({ name: food.name, estimated_weight_g: food.estimated_total_weight_g, calories: food.nutrients && food.nutrients.calories })) });
@@ -508,7 +511,7 @@ $('#manualBtn').onclick = openManualEntry;
 $('#manualBtn').textContent = '手動輸入';
 $('#cameraPhotos').onchange = event => { addFiles(event.target.files); event.target.value = ''; };
 $('#photos').onchange = event => { addFiles(event.target.files); event.target.value = ''; };
-$('#clearPhotos').onclick = () => { state.files = []; renderPreviews(); };
+$('#clearPhotos').onclick = () => { state.files = []; if ($('#mealDescription')) $('#mealDescription').value = ''; renderPreviews(); };
 $('#analyzeBtn').onclick = analyzePhotos;
 $('#saveMealBtn').onclick = saveMeal;
 $('#addManualFoodBtn').onclick = () => {
