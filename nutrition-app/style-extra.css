@@ -1,8 +1,12 @@
 .panel-head { display: flex; justify-content: space-between; align-items: center; }
 .panel-head h3 { margin: 0; }
 .panel-head input { width: auto; margin: 0; }
-.active-member #editMemberBtn { margin-left: auto; }
-.active-member #switchBtn { margin-left: 0; }
+.active-member-info { flex: 1; min-width: 0; }
+.active-member .avatar-edit { margin: 0; padding: 0; border: 0; background: transparent; }
+.active-member .active-name { display: block; width: auto; margin: 2px 0; padding: 0; border: 0; background: transparent; color: inherit; font: 700 1.5rem Georgia, "Noto Serif TC", serif; text-align: left; }
+.active-member #switchBtn { margin-left: auto; }
+.home-date { max-width: 180px; margin: 5px 0 0; color: var(--muted); }
+.home-date input { margin-top: 2px; padding: 7px 9px; color: var(--ink); }
 .capture-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
 .capture-actions .upload { margin: 0; padding: 18px 10px; cursor: pointer; }
 .capture-actions button { grid-column: 1 / -1; border: 1px solid var(--line); border-radius: 12px; padding: 11px; background: var(--card); }

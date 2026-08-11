@@ -4,6 +4,7 @@ const avatarIds = ['adult-1', 'adult-2', 'child-1', 'child-2'];
 const nutrientLabels = { calories: '熱量 kcal', protein_g: '蛋白質 g', fat_g: '脂肪 g', carbohydrate_g: '碳水 g', fiber_g: '纖維 g', sodium_mg: '鈉 mg', calcium_mg: '鈣 mg', iron_mg: '鐵 mg', zinc_mg: '鋅 mg', vitamin_a_ug: '維生素 A μg', vitamin_c_mg: '維生素 C mg', vitamin_d_ug: '維生素 D μg', omega3_mg: 'Omega-3 mg' };
 
 const today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' });
+const selectedDate = () => $('#historyDate').value || today();
 const avatarUrl = id => String(id || '').startsWith('data:image/') ? id : `avatars/${id || 'adult-1'}.svg`;
 const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c]));
 
@@ -65,6 +66,7 @@ async function selectMember(memberId) {
   $('#activeName').textContent = state.active.name;
   $('#activeMode').textContent = state.active.is_child ? '兒童模式' : '';
   $('#activeMode').classList.toggle('hidden', !state.active.is_child);
+  $('#historyDate').max = today();
   $('#historyDate').value = today();
   await refreshHome();
 }
@@ -75,7 +77,7 @@ async function refreshHome() {
 
 async function loadDailySummary() {
   try {
-    const summary = await callApi('daily_summary', { memberId: state.active.member_id, date: today() });
+    const summary = await callApi('daily_summary', { memberId: state.active.member_id, date: selectedDate() });
     state.dailySummary = summary;
     $('#calories').textContent = Math.round(summary.calories);
     $('#protein').textContent = Math.round(summary.protein_g);
@@ -127,6 +129,11 @@ function openMemberDialog(profile = null) {
   showCustomAvatar();
   toggleChildFields();
   $('#memberDialog').showModal();
+}
+
+function openAvatarEditor() {
+  openMemberDialog(state.profile);
+  requestAnimationFrame(() => $('#avatarFieldset').scrollIntoView({ block: 'start' }));
 }
 
 function renderAvatarOptions(selected) {
@@ -207,7 +214,7 @@ function openPhotoDialog() {
   state.editRecordId = '';
   state.draftEditIndex = null;
   state.draftFoods = [];
-  prepareMealDate();
+  prepareMealDate(selectedDate());
   $('#captureStep').classList.remove('hidden');
   $('#reviewStep').classList.add('hidden');
   $('#photoDialogTitle').textContent = '新增餐點';
@@ -479,9 +486,9 @@ function closeMealDialogOrGoBack(dialog) {
 }
 
 async function showAdvice() {
-  showInfo('飲食建議', '<p>正在整理今日與七日紀錄…</p>');
+  showInfo('飲食建議', `<p>正在整理 ${selectedDate()} 與七日紀錄…</p>`);
   try {
-    const advice = await callApi('nutrition_advice', { memberId: state.active.member_id, date: today() });
+    const advice = await callApi('nutrition_advice', { memberId: state.active.member_id, date: selectedDate() });
     $('#infoBody').innerHTML = `<p>${escapeHtml(advice.data_quality)}</p><h3>做得好的地方</h3>${renderList(advice.strengths)}<h3>紀錄中較少的來源</h3>${renderList(advice.lower_recorded_sources)}<h3>自己做</h3>${renderList(advice.home_cooking)}<h3>外食方便買</h3>${renderList(advice.eating_out)}<p class="muted">${escapeHtml(advice.caution)}</p>`;
   } catch (error) { $('#infoBody').textContent = error.message; }
 }
@@ -499,12 +506,12 @@ async function showWeekly() {
 function openDailyLog(field) {
   const isWater = field === 'water_ml';
   const current = state.dailySummary && state.dailySummary[field] != null ? state.dailySummary[field] : '';
-  showInfo(isWater ? '修改今日飲水' : '修改今日步數', `<form id="dailyLogForm"><label>${isWater ? '飲水 ml' : '今日步數'}<input name="value" type="number" min="0" max="${isWater ? 20000 : 100000}" value="${current}" required></label><button class="primary">儲存</button></form>`);
+  showInfo(`${selectedDate()} ${isWater ? '飲水' : '步數'}`, `<form id="dailyLogForm"><label>${isWater ? '飲水 ml' : '步數'}<input name="value" type="number" min="0" max="${isWater ? 20000 : 100000}" value="${current}" required></label><button class="primary">儲存</button></form>`);
   $('#dailyLogForm').onsubmit = async event => {
     event.preventDefault();
     const value = new FormData(event.currentTarget).get('value');
     const log = {
-      date: today(),
+      date: selectedDate(),
       water_ml: isWater ? (value === '' ? null : Number(value)) : state.dailySummary?.water_ml ?? null,
       steps: isWater ? state.dailySummary?.steps ?? null : (value === '' ? null : Number(value)),
     };
@@ -526,7 +533,8 @@ function showAccountSettings() {
 function renderList(items) { return items && items.length ? `<ul>${items.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>` : '<p class="muted">目前沒有足夠資料。</p>'; }
 
 $('#newMemberBtn').onclick = () => openMemberDialog();
-$('#editMemberBtn').onclick = () => openMemberDialog(state.profile);
+$('#activeName').onclick = () => openMemberDialog(state.profile);
+$('#avatarEditBtn').onclick = openAvatarEditor;
 $('#switchBtn').onclick = () => { $('#homeView').classList.add('hidden'); $('#membersView').classList.remove('hidden'); state.active = null; };
 $('#cameraBtn').onclick = openPhotoDialog;
 $('#manualBtn').onclick = openManualEntry;
@@ -545,7 +553,7 @@ $('#adviceBtn').onclick = showAdvice;
 $('#weeklyBtn').onclick = showWeekly;
 $('#waterCard').onclick = () => openDailyLog('water_ml');
 $('#stepsCard').onclick = () => openDailyLog('steps');
-$('#historyDate').onchange = loadMeals;
+$('#historyDate').onchange = () => { state.dailySummary = null; refreshHome(); };
 document.querySelectorAll('[name=is_child]').forEach(input => input.onchange = toggleChildFields);
 $('#avatarPhoto').onchange = async event => {
   const file = event.target.files[0];
