@@ -1,5 +1,5 @@
 const $ = selector => document.querySelector(selector);
-const state = { members: [], active: null, profile: null, files: [], analysis: null, customAvatar: '', editRecordId: '', draftEditIndex: null, draftFoods: [], favorites: [] };
+const state = { members: [], active: null, profile: null, dailySummary: null, files: [], analysis: null, customAvatar: '', editRecordId: '', draftEditIndex: null, draftFoods: [], favorites: [] };
 const avatarIds = ['adult-1', 'adult-2', 'child-1', 'child-2'];
 const nutrientLabels = { calories: '熱量 kcal', protein_g: '蛋白質 g', fat_g: '脂肪 g', carbohydrate_g: '碳水 g', fiber_g: '纖維 g', sodium_mg: '鈉 mg', calcium_mg: '鈣 mg', iron_mg: '鐵 mg', zinc_mg: '鋅 mg', vitamin_a_ug: '維生素 A μg', vitamin_c_mg: '維生素 C mg', vitamin_d_ug: '維生素 D μg', omega3_mg: 'Omega-3 mg' };
 
@@ -76,9 +76,12 @@ async function refreshHome() {
 async function loadDailySummary() {
   try {
     const summary = await callApi('daily_summary', { memberId: state.active.member_id, date: today() });
+    state.dailySummary = summary;
     $('#calories').textContent = Math.round(summary.calories);
     $('#protein').textContent = Math.round(summary.protein_g);
-    $('#vegetables').textContent = summary.water_ml == null ? '—' : Math.round(summary.water_ml);
+    $('#fat').textContent = Math.round(summary.fat_g);
+    $('#water').textContent = summary.water_ml == null ? '—' : Math.round(summary.water_ml);
+    $('#steps').textContent = summary.steps == null ? '—' : Math.round(summary.steps);
     $('#feedback').textContent = summary.feedback;
   } catch (error) {
     $('#feedback').textContent = error.message;
@@ -493,13 +496,20 @@ async function showWeekly() {
   } catch (error) { $('#infoBody').textContent = error.message; }
 }
 
-function openDailyLog() {
-  showInfo('今日飲水與步數', '<form id="dailyLogForm"><label>飲水 ml（選填）<input name="water_ml" type="number" min="0" max="20000"></label><label>今日步數（選填）<input name="steps" type="number" min="0" max="100000"></label><button class="primary">儲存</button></form>');
+function openDailyLog(field) {
+  const isWater = field === 'water_ml';
+  const current = state.dailySummary && state.dailySummary[field] != null ? state.dailySummary[field] : '';
+  showInfo(isWater ? '修改今日飲水' : '修改今日步數', `<form id="dailyLogForm"><label>${isWater ? '飲水 ml' : '今日步數'}<input name="value" type="number" min="0" max="${isWater ? 20000 : 100000}" value="${current}" required></label><button class="primary">儲存</button></form>`);
   $('#dailyLogForm').onsubmit = async event => {
     event.preventDefault();
-    const values = Object.fromEntries(new FormData(event.currentTarget));
+    const value = new FormData(event.currentTarget).get('value');
+    const log = {
+      date: today(),
+      water_ml: isWater ? (value === '' ? null : Number(value)) : state.dailySummary?.water_ml ?? null,
+      steps: isWater ? state.dailySummary?.steps ?? null : (value === '' ? null : Number(value)),
+    };
     try {
-      await callApi('save_daily_log', { memberId: state.active.member_id, log: { date: today(), water_ml: values.water_ml ? Number(values.water_ml) : null, steps: values.steps ? Number(values.steps) : null } });
+      await callApi('save_daily_log', { memberId: state.active.member_id, log });
       $('#infoDialog').close();
       await loadDailySummary();
       toast('已儲存');
@@ -533,7 +543,8 @@ $('#addManualFoodBtn').onclick = () => {
 };
 $('#adviceBtn').onclick = showAdvice;
 $('#weeklyBtn').onclick = showWeekly;
-$('#logBtn').onclick = openDailyLog;
+$('#waterCard').onclick = () => openDailyLog('water_ml');
+$('#stepsCard').onclick = () => openDailyLog('steps');
 $('#historyDate').onchange = loadMeals;
 document.querySelectorAll('[name=is_child]').forEach(input => input.onchange = toggleChildFields);
 $('#avatarPhoto').onchange = async event => {
@@ -549,7 +560,4 @@ document.querySelectorAll('[data-close]').forEach(button => button.onclick = () 
 renderAvatarOptions('adult-1');
 document.querySelector('header').insertAdjacentHTML('beforeend', '<button id="settingsBtn" class="icon" aria-label="帳號管理">⚙</button>');
 $('#settingsBtn').onclick = showAccountSettings;
-const summaryThird = $('#vegetables').closest('article'); summaryThird.querySelector('small').textContent = '今日飲水'; summaryThird.querySelector('span').textContent = 'ml';
-$('#logBtn').textContent = '飲水／步數';
-const home = $('#homeView'); const panels = home.querySelectorAll('.panel'); const summary = home.querySelector('.summary'); home.insertBefore(panels[0], summary); home.insertBefore(panels[1], summary);
 loadMembers();
