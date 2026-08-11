@@ -29,6 +29,7 @@ h1, h2, h3 { font-family: Georgia, "Noto Serif TC", serif; letter-spacing: .04em
 .summary-card { border: 1px solid var(--line); border-radius: 18px; padding: 16px; color: inherit; text-align: left; cursor: pointer; }
 .summary-card small, .summary-card span { display: block; color: var(--muted); }
 .summary-card strong { display: block; margin: 5px 0; font-size: 1.65rem; }
+.panel + .summary { margin-top: 14px; }
 .actions { grid-template-columns: repeat(2, 1fr); }
 @media(max-width:600px){.summary > :last-child{grid-column:1/-1}}
 .primary { background: #596b56; }
@@ -41,6 +42,10 @@ h1, h2, h3 { font-family: Georgia, "Noto Serif TC", serif; letter-spacing: .04em
 .favorite-check input { display: inline-block; width: auto; margin-right: 6px; }
 .favorites { margin: 14px 0; padding: 12px; border: 1px solid var(--line); border-radius: 14px; }
 .favorites button { display: inline-block; width: auto; margin: 7px 6px 0 0; border: 1px solid var(--line); border-radius: 999px; padding: 7px 10px; background: white; }
+.favorite-list { display: grid; gap: 7px; margin-top: 8px; }
+.favorite-item { display: flex; align-items: center; gap: 7px; }
+.favorite-item [data-favorite] { flex: 1; margin: 0; text-align: left; }
+.favorite-item .favorite-delete { margin: 0; color: #934b3f; }
 .draft-list { margin: 14px 0; padding: 12px; background: #f4efe3; border: 1px solid var(--line); border-radius: 14px; }
 .draft-food { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
 .draft-food:first-of-type { margin-top: 8px; }

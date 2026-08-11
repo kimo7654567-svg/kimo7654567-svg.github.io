@@ -238,8 +238,19 @@ async function loadFavorites() {
 function renderDraftFoods() {
   let area = $('#draftFoods');
   if (!area) { $('#analyzeBtn').insertAdjacentHTML('beforebegin', '<div id="draftFoods"></div>'); area = $('#draftFoods'); }
-  area.innerHTML = `${state.favorites.length ? `<div class="favorites"><b>我的最愛</b>${state.favorites.map(item => `<button type="button" data-favorite="${item.favorite_id}">☆ ${escapeHtml(item.food.name)}</button>`).join('')}</div>` : ''}${state.draftFoods.length ? `<div class="draft-list"><b>手動／最愛食物</b>${state.draftFoods.map((food, index) => `<div class="draft-food"><div><strong>${escapeHtml(food.name)}</strong><small>${food.estimated_total_weight_g == null ? '重量估算中' : `${Math.round(Number(food.estimated_total_weight_g))} g`}｜${food.nutrients && food.nutrients.calories != null ? `${Math.round(Number(food.nutrients.calories))} kcal` : '熱量估算中'}</small></div><div class="draft-actions"><button type="button" data-edit-draft="${index}">修改</button><button type="button" data-remove-draft="${index}">刪除</button></div></div>`).join('')}</div>` : '<p class="muted">尚未加入手動食物；已選照片會顯示在上方。</p>'}`;
+  area.innerHTML = `${state.favorites.length ? `<div class="favorites"><b>我的最愛</b><div class="favorite-list">${state.favorites.map(item => `<div class="favorite-item"><button type="button" data-favorite="${item.favorite_id}">☆ ${escapeHtml(item.food.name)}</button><button type="button" class="favorite-delete" data-delete-favorite="${item.favorite_id}" aria-label="刪除 ${escapeHtml(item.food.name)}">刪除</button></div>`).join('')}</div></div>` : ''}${state.draftFoods.length ? `<div class="draft-list"><b>手動／最愛食物</b>${state.draftFoods.map((food, index) => `<div class="draft-food"><div><strong>${escapeHtml(food.name)}</strong><small>${food.estimated_total_weight_g == null ? '重量估算中' : `${Math.round(Number(food.estimated_total_weight_g))} g`}｜${food.nutrients && food.nutrients.calories != null ? `${Math.round(Number(food.nutrients.calories))} kcal` : '熱量估算中'}</small></div><div class="draft-actions"><button type="button" data-edit-draft="${index}">修改</button><button type="button" data-remove-draft="${index}">刪除</button></div></div>`).join('')}</div>` : '<p class="muted">尚未加入手動食物；已選照片會顯示在上方。</p>'}`;
   area.querySelectorAll('[data-favorite]').forEach(button => button.onclick = () => { const item = state.favorites.find(value => value.favorite_id === button.dataset.favorite); state.draftFoods.push(structuredClone(item.food)); renderDraftFoods(); });
+  area.querySelectorAll('[data-delete-favorite]').forEach(button => button.onclick = async () => {
+    const item = state.favorites.find(value => value.favorite_id === button.dataset.deleteFavorite);
+    if (!item || !confirm(`刪除最愛「${item.food.name}」嗎？已保存的餐點不會受影響。`)) return;
+    button.disabled = true;
+    try {
+      await callApi('delete_favorite', { memberId: state.active.member_id, favoriteId: item.favorite_id });
+      state.favorites = state.favorites.filter(value => value.favorite_id !== item.favorite_id);
+      renderDraftFoods();
+      toast('已刪除最愛');
+    } catch (error) { button.disabled = false; toast(error.message); }
+  });
   area.querySelectorAll('[data-edit-draft]').forEach(button => button.onclick = () => editDraftFood(Number(button.dataset.editDraft)));
   area.querySelectorAll('[data-remove-draft]').forEach(button => button.onclick = () => { state.draftFoods.splice(Number(button.dataset.removeDraft), 1); renderDraftFoods(); });
 }
