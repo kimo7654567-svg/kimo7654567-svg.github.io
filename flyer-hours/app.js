@@ -7,7 +7,7 @@ const duration = n => `${Math.floor(n/60)} 小時 ${n%60} 分`;
 const time = v => v ? v.slice(11,16) : '--:--';
 const fieldLabel = k => k==='start'?'上班':'下班';
 let token = sessionStorage.getItem('flyerToken') || '', data, selectedDate = today(), busy = false;
-let pending = [], pendingUser = '', sending = false, historyWorker = '';
+let pending = [], pendingUser = '', sending = false, historyWorker = '', focusRecord = '';
 function notice(s){const status=editor.querySelector('#editor-status');if(editor.open&&status){status.textContent=s;status.hidden=false;}const el=document.querySelector('#message');el.textContent=s;el.classList.add('visible');clearTimeout(notice.timer);notice.timer=setTimeout(()=>el.classList.remove('visible'),5000);}
 async function api(action,payload={}){
   if(!window.API_URL)throw Error('請先在 config.js 設定 Apps Script API 網址。');
@@ -19,7 +19,7 @@ async function run(fn){
   try{await fn();}catch(e){notice(e.message);}finally{
     busy=false;editor.querySelectorAll('button').forEach(b=>b.disabled=false);
     document.querySelector('#logout').disabled=sending;
-    if(data)render();else login();
+    if(data){render();if(focusRecord){const card=[...app.querySelectorAll('[data-record-card]')].find(el=>el.dataset.recordCard===focusRecord);card?.scrollIntoView({behavior:'smooth',block:'center'});card?.querySelector('[data-clock=start]:not([disabled]),[data-manage]:not([disabled])')?.focus({preventScroll:true});focusRecord='';}}else login();
   }
 }
 function pendingKey(){return 'flyerPending:'+window.API_URL+':'+pendingUser;}
@@ -88,13 +88,13 @@ function workerView(){
 function recentDays(records){return Array.from({length:30},(_,n)=>{const d=new Date(selectedDate+'T12:00:00+08:00');d.setUTCDate(d.getUTCDate()-n);const date=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Taipei'}).format(d);const r=records.find(r=>r.date===date);return r?recordCard(r):`<div class="record row"><span>${date}</span><span class="muted">未排班</span></div>`;}).join('');}
 function adminView(){
   const workers=data.workers.filter(w=>w.role!=='admin');
-  return `<section class="card"><label>查看日期<input id="date" type="date" value="${selectedDate}"></label>${data.records.filter(r=>r.date===selectedDate).map(r=>recordCard(r,true)).join('')||'<p class="muted">這天尚未排班。</p>'}</section>${historyView()}<section class="card"><h2>設定預計上班</h2>${workers.length?'':'<p class="hint">請先在下方新增工讀生，再設定排班。</p>'}<form id="schedule"><div class="grid"><label>日期<input type="date" name="date" value="${selectedDate}" required></label><label>工讀生<select name="worker_id" required>${workers.map(w=>`<option value="${escapeHtml(w.worker_id)}">${escapeHtml(w.name)}</option>`).join('')}</select></label></div><label>預計上班時間<input type="time" name="planned_start" required></label><button ${workers.length?'':'disabled'}>儲存排班</button></form></section><section class="card"><h2>人員歷史</h2><div class="actions">${workers.map(w=>`<button class="secondary" data-history="${escapeHtml(w.worker_id)}">${escapeHtml(w.name)}</button>`).join('')||'<span class="muted">尚無工讀生。</span>'}</div></section><section class="card"><h2>新增工讀生</h2><form id="create-worker"><label>姓名<input name="name" required maxlength="50" autocomplete="off"></label><label>個人 PIN<input name="pin" type="password" required minlength="6" maxlength="100" autocomplete="new-password"></label><button>建立帳號</button></form></section>`;
+  return `<section class="card" id="clock-section"><div class="row"><h2>上下班打卡</h2><span class="badge">管理者代打卡</span></div><p class="muted">每個人的上班、下班按鈕都在這裡。</p><label>打卡紀錄日期<input id="date" type="date" value="${selectedDate}"></label>${data.records.filter(r=>r.date===selectedDate).map(r=>recordCard(r,true)).join('')||'<p class="hint">這天尚未排班，請在下方設定排班；儲存後會直接顯示打卡按鈕。</p>'}</section>${historyView()}<section class="card"><h2>設定預計上班</h2>${workers.length?'':'<p class="hint">請先在下方新增工讀生，再設定排班。</p>'}<form id="schedule"><div class="grid"><label>日期<input type="date" name="date" value="${selectedDate}" required></label><label>工讀生<select name="worker_id" required>${workers.map(w=>`<option value="${escapeHtml(w.worker_id)}">${escapeHtml(w.name)}</option>`).join('')}</select></label></div><label>預計上班時間<input type="time" name="planned_start" required></label><button ${workers.length?'':'disabled'}>儲存排班</button></form></section><section class="card"><h2>人員歷史</h2><div class="actions">${workers.map(w=>`<button class="secondary" data-history="${escapeHtml(w.worker_id)}">${escapeHtml(w.name)}</button>`).join('')||'<span class="muted">尚無工讀生。</span>'}</div></section><section class="card"><h2>新增工讀生</h2><form id="create-worker"><label>姓名<input name="name" required maxlength="50" autocomplete="off"></label><label>個人 PIN<input name="pin" type="password" required minlength="6" maxlength="100" autocomplete="new-password"></label><button>建立帳號</button></form></section>`;
 }
 function bindForms(admin){
   if(admin){
     document.querySelector('#create-worker').onsubmit=e=>{e.preventDefault();const p=Object.fromEntries(new FormData(e.target));run(async()=>{await api('createWorker',p);await refresh();notice('工讀生帳號已建立');});};
     document.querySelector('#date').onchange=e=>{selectedDate=e.target.value;run(refresh);};
-    document.querySelector('#schedule').onsubmit=e=>{e.preventDefault();const p=Object.fromEntries(new FormData(e.target));run(async()=>{await api('schedule',p);await refresh();notice('排班已儲存');});};
+    document.querySelector('#schedule').onsubmit=e=>{e.preventDefault();const p=Object.fromEntries(new FormData(e.target));run(async()=>{const result=await api('schedule',p);selectedDate=p.date;focusRecord=result.record_id;await refresh();notice('排班已儲存，可以直接按上班打卡');});};
   }else{
     const r=data.records.find(r=>r.date===selectedDate),note=document.querySelector('#note'),upload=document.querySelector('#upload');
     if(note)note.onsubmit=e=>saveNote(e,r);
