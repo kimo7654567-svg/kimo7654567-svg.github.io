@@ -45,8 +45,8 @@ function clockButtons(r,admin){
   const v=viewRecord(r);
   return `<div class="actions">${['start','end'].map(k=>{
     const p=pending.find(p=>p.record_id===r.record_id&&p.field===k);
-    const disabled=v['actual_'+k]||(k==='end'&&!v.actual_start);
-    return `<button data-clock="${k}" data-record="${escapeHtml(r.record_id)}" ${disabled?'disabled':''}>${p?fieldLabel(k)+'待儲存':r['actual_'+k]?'已'+fieldLabel(k):(admin?'幫他':'')+fieldLabel(k)}</button>`;
+    const disabled=!!p||(k==='end'&&!v.actual_start)||(r['actual_'+k]&&recordPending(r.record_id).length);
+    return `<button data-clock="${k}" data-record="${escapeHtml(r.record_id)}" ${disabled?'disabled':''}>${p?fieldLabel(k)+'待儲存':r['actual_'+k]?fieldLabel(k)+' '+time(r['actual_'+k])+' ✎':(admin?'幫他':'')+fieldLabel(k)}</button>`;
   }).join('')}</div>`;
 }
 function auditHistory(r){
@@ -88,7 +88,7 @@ function workerView(){
 function recentDays(records){return Array.from({length:30},(_,n)=>{const d=new Date(selectedDate+'T12:00:00+08:00');d.setUTCDate(d.getUTCDate()-n);const date=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Taipei'}).format(d);const r=records.find(r=>r.date===date);return r?recordCard(r):`<div class="record row"><span>${date}</span><span class="muted">未排班</span></div>`;}).join('');}
 function adminView(){
   const workers=data.workers.filter(w=>w.role!=='admin');
-  return `<section class="card" id="clock-section"><div class="row"><h2>上下班打卡</h2><span class="badge">管理者代打卡</span></div><p class="muted">每個人的上班、下班按鈕都在這裡。</p><label>打卡紀錄日期<input id="date" type="date" value="${selectedDate}"></label>${data.records.filter(r=>r.date===selectedDate).map(r=>recordCard(r,true)).join('')||'<p class="hint">這天尚未排班，請在下方設定排班；儲存後會直接顯示打卡按鈕。</p>'}</section>${historyView()}<section class="card"><h2>設定預計上班</h2>${workers.length?'':'<p class="hint">請先在下方新增工讀生，再設定排班。</p>'}<form id="schedule"><div class="grid"><label>日期<input type="date" name="date" value="${selectedDate}" required></label><label>工讀生<select name="worker_id" required>${workers.map(w=>`<option value="${escapeHtml(w.worker_id)}">${escapeHtml(w.name)}</option>`).join('')}</select></label></div><label>預計上班時間<input type="time" name="planned_start" required></label><button ${workers.length?'':'disabled'}>儲存排班</button></form></section><section class="card"><h2>人員歷史</h2><div class="actions">${workers.map(w=>`<button class="secondary" data-history="${escapeHtml(w.worker_id)}">${escapeHtml(w.name)}</button>`).join('')||'<span class="muted">尚無工讀生。</span>'}</div></section><section class="card"><h2>新增工讀生</h2><form id="create-worker"><label>姓名<input name="name" required maxlength="50" autocomplete="off"></label><label>個人 PIN<input name="pin" type="password" required minlength="6" maxlength="100" autocomplete="new-password"></label><button>建立帳號</button></form></section>`;
+  return `<section class="card" id="clock-section"><div class="row"><h2>上下班打卡</h2><span class="badge">管理者代打卡</span></div><p class="muted">每個人的上班、下班按鈕都在這裡。</p><label>打卡紀錄日期<input id="date" type="date" value="${selectedDate}"></label>${data.records.filter(r=>r.date===selectedDate).map(r=>recordCard(r,true)).join('')||'<p class="hint">這天尚未排班，請在下方設定排班；儲存後會直接顯示打卡按鈕。</p>'}</section>${historyView()}<section class="card"><h2>設定預計上班</h2>${workers.length?'':'<p class="hint">請先在下方新增工讀生，再設定排班。</p>'}<form id="schedule"><div class="grid"><label>日期<input type="date" name="date" value="${selectedDate}" required></label><label>工讀生<select name="worker_id" required>${workers.map(w=>`<option value="${escapeHtml(w.worker_id)}">${escapeHtml(w.name)}</option>`).join('')}</select></label></div><label>預計上班時間<input type="time" name="planned_start" required></label><button ${workers.length?'':'disabled'}>確認排班</button></form></section><section class="card"><h2>人員歷史</h2><div class="actions">${workers.map(w=>`<button class="secondary" data-history="${escapeHtml(w.worker_id)}">${escapeHtml(w.name)}</button>`).join('')||'<span class="muted">尚無工讀生。</span>'}</div></section><section class="card"><h2>新增工讀生</h2><form id="create-worker"><label>姓名<input name="name" required maxlength="50" autocomplete="off"></label><label>個人 PIN<input name="pin" type="password" required minlength="6" maxlength="100" autocomplete="new-password"></label><button>建立帳號</button></form></section>`;
 }
 function bindForms(admin){
   if(admin){
@@ -101,14 +101,34 @@ function bindForms(admin){
     if(upload)upload.onchange=e=>uploadImages(e,r);
   }
 }
-function enqueueClock(record_id,field){
+function enqueueClock(record_id,field,chosenTime){
   const r=data.records.find(r=>r.record_id===record_id),v=r&&viewRecord(r);
   if(!r||v['actual_'+field]||(field==='end'&&!v.actual_start))return;
-  if(field==='start'&&r.date!==today()){notice('其他日期請使用「補登／修改時間」填寫實際時間。');return;}
-  const entry={record_id,field,captured_at:capturedTime(),request_id:crypto.randomUUID(),state:'queued'};
+  const entry={record_id,field,captured_at:chosenTime||capturedTime(),request_id:crypto.randomUUID(),state:'queued'};
   pending.push(entry);
   try{persistPending();}catch(e){pending.pop();notice('無法保留待儲存打卡，請允許此網站使用本機儲存空間。');return;}
   render();pumpClocks();
+}
+function openClockEditor(record_id,field){
+  const r=data.records.find(r=>r.record_id===record_id);if(!r||pending.some(p=>p.record_id===record_id&&p.field===field))return;
+  const existing=r['actual_'+field],v=viewRecord(r),now=capturedTime();
+  if(field==='end'&&!v.actual_start){notice('請先設定上班時間');return;}
+  const defaultDate=existing?.slice(0,10)||r.date;
+  const defaultTime=existing?.slice(11,16)||(r.date===today()?now.slice(11,16):field==='start'?r.planned_start||'18:30':v.actual_start?.slice(11,16)||'21:00');
+  editor.innerHTML=`<h2>${escapeHtml(r.name)} · ${existing?'修改':'確認'}${fieldLabel(field)}時間</h2><p class="muted">選好日期與時間後，按下確認才會儲存。</p><p id="editor-status" class="hint" role="status" hidden></p><form id="confirm-clock"><label>日期<input name="date" type="date" value="${escapeHtml(defaultDate)}" required ${field==='start'?'readonly':''}></label><label>${fieldLabel(field)}時間<input name="time" type="time" value="${escapeHtml(defaultTime)}" required></label><p id="clock-preview" class="hint" aria-live="polite"></p><div class="actions"><button type="button" class="secondary" id="cancel-clock">取消</button><button type="submit">${existing?'確認修改':'確認'+fieldLabel(field)}</button></div></form>`;
+  const form=editor.querySelector('#confirm-clock');
+  const preview=()=>editor.querySelector('#clock-preview').textContent=`${r.name} · ${form.elements.date.value} ${form.elements.time.value} ${fieldLabel(field)}`;
+  form.oninput=preview;preview();editor.querySelector('#cancel-clock').onclick=()=>editor.close();
+  form.onsubmit=e=>{
+    e.preventDefault();if(busy)return;
+    const value=form.elements.date.value+'T'+form.elements.time.value,chosen=value+':00+08:00';
+    if(Date.parse(chosen)>Date.now()){notice('請選擇現在或過去的實際時間');return;}
+    const next={...v,['actual_'+field]:chosen};
+    if(next.actual_start&&next.actual_end){const diff=Date.parse(next.actual_end)-Date.parse(next.actual_start);if(diff<0||diff>24*3600000){notice('下班必須在上班之後，且單次工時不超過 24 小時');return;}}
+    if(existing){run(async()=>{await api('edit',{record_id,field,value});editor.close();await refresh();notice('時間已修改，工時已重新計算');});}
+    else{editor.close();enqueueClock(record_id,field,chosen);}
+  };
+  editor.showModal();
 }
 async function pumpClocks(){
   if(sending)return;sending=true;render();
@@ -135,7 +155,7 @@ function recalculateWeekly(){
 }
 function openManagerEditor(record_id){
   const r=data.records.find(r=>r.record_id===record_id);if(!r||recordPending(record_id).length)return;
-  editor.innerHTML=`<div class="row"><h2>${escapeHtml(r.name)} · ${escapeHtml(r.date)}</h2><button class="secondary" id="close-editor" type="button">關閉</button></div><form id="edit-times"><h3>補登／修改實際時間</h3><label>實際上班<input name="start" type="datetime-local" value="${escapeHtml(r.actual_start?.slice(0,16)||r.date+'T'+(r.planned_start||'18:30'))}" required></label><label>實際下班<input name="end" type="datetime-local" value="${escapeHtml(r.actual_end?.slice(0,16)||'')}" ${r.actual_end?'required':''}></label><label>修改原因（選填）<input name="reason" maxlength="500" placeholder="例如：忘記打卡，依現場時間補登"></label><button>儲存時間</button></form><h3>原始打卡時間</h3><p class="muted">上班：${escapeHtml(r.original_start||'尚無自動打卡')}<br>下班：${escapeHtml(r.original_end||'尚無自動打卡')}</p><h3>路線截圖</h3><div class="links">${imageLinks(r)||'<span class="muted">尚未上傳</span>'}</div><label class="button secondary">＋ 幫他上傳路線截圖<input id="admin-upload" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden></label><form id="admin-note"><h3>備註</h3><textarea name="note" maxlength="2000">${escapeHtml(r.note)}</textarea><button class="secondary">儲存備註</button></form><details><summary>時間修改歷程</summary>${auditHistory(r)}</details>`;
+  editor.innerHTML=`<div class="row"><h2>${escapeHtml(r.name)} · ${escapeHtml(r.date)}</h2><button class="secondary" id="close-editor" type="button">關閉</button></div><form id="edit-times"><h3>補登／修改實際時間</h3><label>實際上班<input name="start" type="datetime-local" value="${escapeHtml(r.actual_start?.slice(0,16)||r.date+'T'+(r.planned_start||'18:30'))}" required></label><label>實際下班<input name="end" type="datetime-local" value="${escapeHtml(r.actual_end?.slice(0,16)||'')}" ${r.actual_end?'required':''}></label><label>修改原因（選填）<input name="reason" maxlength="500" placeholder="例如：忘記打卡，依現場時間補登"></label><button>確認儲存時間</button></form><h3>原始打卡時間</h3><p class="muted">上班：${escapeHtml(r.original_start||'尚無自動打卡')}<br>下班：${escapeHtml(r.original_end||'尚無自動打卡')}</p><h3>路線截圖</h3><div class="links">${imageLinks(r)||'<span class="muted">尚未上傳</span>'}</div><label class="button secondary">＋ 幫他上傳路線截圖<input id="admin-upload" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden></label><form id="admin-note"><h3>備註</h3><textarea name="note" maxlength="2000">${escapeHtml(r.note)}</textarea><button class="secondary">儲存備註</button></form><details><summary>時間修改歷程</summary>${auditHistory(r)}</details>`;
   editor.querySelector('#close-editor').onclick=()=>editor.close();
   editor.querySelector('#edit-times').onsubmit=e=>{e.preventDefault();const p=Object.fromEntries(new FormData(e.target));run(async()=>{await api('editTimes',{record_id,...p});editor.close();await refresh();notice('時間已更新，今日與該週工時已重新計算');});};
   editor.querySelector('#admin-note').onsubmit=e=>saveNote(e,r);
@@ -155,13 +175,11 @@ function uploadImages(e,r){const files=[...e.target.files];run(async()=>{
 });}
 app.addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b||b.disabled||busy)return;
-  if(b.dataset.clock)enqueueClock(b.dataset.record,b.dataset.clock);
+  if(b.dataset.clock)openClockEditor(b.dataset.record,b.dataset.clock);
   if(b.dataset.manage)openManagerEditor(b.dataset.manage);
   if(b.dataset.history){historyWorker=b.dataset.history;render();document.querySelector('#history')?.scrollIntoView({behavior:'smooth'});}
   if(b.dataset.edit){
-    const r=data.records.find(r=>r.record_id===b.dataset.record),field=b.dataset.edit;
-    const value=prompt('輸入實際日期時間（YYYY-MM-DDTHH:mm），跨午夜請填下一天日期。',r['actual_'+field]?.slice(0,16)||`${r.date}T18:30`);
-    if(value!==null)run(async()=>{await api('edit',{record_id:r.record_id,field,value});await refresh();notice('時間已更新，工時已重新計算');});
+    openClockEditor(b.dataset.record,b.dataset.edit);
   }
   if(b.dataset.retry){const p=pending.find(p=>p.request_id===b.dataset.retry);p.state='queued';delete p.error;try{persistPending();render();pumpClocks();}catch(e){p.state='failed';notice(e.message);}}
   if(b.dataset.discard&&confirm('只取消這台裝置的待儲存項目；已存入 Google 的打卡不會刪除。確定取消？')){
