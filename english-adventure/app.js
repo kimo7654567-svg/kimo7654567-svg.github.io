@@ -140,7 +140,17 @@ function load(userName) {
 }
 
 // ==================== 用戶管理 ====================
-function getAllUsers() { return JSON.parse(localStorage.getItem('ea_users') || '[]'); }
+function getAllUsers() {
+  const users = JSON.parse(localStorage.getItem('ea_users') || '[]');
+  // 使用者索引遺失時，仍保留並顯示既有的個別學習資料。
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key.startsWith('ea_state_')) continue;
+    const name = key.slice('ea_state_'.length);
+    if (name && !users.some(u => u.name === name)) users.push({ name, emoji: '👤' });
+  }
+  return users;
+}
 function saveUsers(users) { localStorage.setItem('ea_users', JSON.stringify(users)); }
 function getLastUser() { return localStorage.getItem('ea_last_user') || null; }
 function setLastUser(name) { localStorage.setItem('ea_last_user', name); }
@@ -181,7 +191,34 @@ function renderUserSelect() {
           <span class="user-name">新增用戶</span>
         </button>
       </div>
+      <button onclick="restoreCloudUsers(this)" class="user-btn">☁️ 找回雲端用戶</button>
+      <p style="text-align:center;color:var(--text-soft)">換裝置或清除瀏覽資料後，可找回原帳號與已同步的單字。</p>
+      <p id="userRecoveryStatus" style="text-align:center" role="status"></p>
     </div>`;
+}
+
+async function restoreCloudUsers(button) {
+  button.disabled = true;
+  const status = document.getElementById('userRecoveryStatus');
+  status.textContent = '正在尋找雲端用戶…';
+  try {
+    const data = await callScript({ type: 'sheets_get_users' });
+    if (!Array.isArray(data.users) || data.users.some(name => typeof name !== 'string' || !name.trim())) {
+      throw new Error('雲端用戶清單格式錯誤');
+    }
+    const users = getAllUsers();
+    data.users.forEach(name => {
+      if (!users.some(u => u.name === name)) users.push({ name, emoji: '☁️' });
+    });
+    saveUsers(users);
+    renderUserSelect();
+    document.getElementById('userRecoveryStatus').textContent = data.users.length
+      ? '請選擇原本的用戶，再到設定按「從雲端重新整理單字庫」取回單字。'
+      : '雲端沒有找到用戶，請確認 API 設定或原本使用的網址。';
+  } catch(e) {
+    status.textContent = '找回失敗：' + e.message;
+    button.disabled = false;
+  }
 }
 
 function showAddUser() {
@@ -1843,6 +1880,6 @@ try {
     document.getElementById('appWrapper').style.display = 'none';
     renderUserSelect();
   } catch(e2) {
-    document.body.innerHTML = '<div style="padding:40px;text-align:center;font-family:sans-serif"><h2>載入錯誤</h2><p>' + e.message + '</p><button onclick="localStorage.clear();location.reload()">清除資料並重新載入</button></div>';
+    document.body.innerHTML = '<div style="padding:40px;text-align:center;font-family:sans-serif"><h2>載入錯誤</h2><p>' + html(e.message) + '</p><p>既有資料已保留。請重新載入，或聯絡維護者協助恢復。</p><button onclick="location.reload()">重新載入</button></div>';
   }
 }
