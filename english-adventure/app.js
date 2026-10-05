@@ -166,6 +166,7 @@ function loginUser(name) {
   showScreen('home');
   document.getElementById('userSelectScreen').style.display = 'none';
   document.getElementById('appWrapper').style.display = 'block';
+  if (!state.words.length && !state.jaWords.length) refreshFromSheets();
 }
 
 function showUserSelect() {
@@ -213,7 +214,7 @@ async function restoreCloudUsers(button) {
     saveUsers(users);
     renderUserSelect();
     document.getElementById('userRecoveryStatus').textContent = data.users.length
-      ? '請選擇原本的用戶，再到設定按「從雲端重新整理單字庫」取回單字。'
+      ? '請選擇原本的用戶，空單字庫會自動從雲端取回單字。'
       : '雲端沒有找到用戶，請確認 API 設定或原本使用的網址。';
   } catch(e) {
     status.textContent = '找回失敗：' + e.message;
@@ -274,9 +275,13 @@ async function sheetsUpdate(lang, word, stage, nextReview) {
 
 async function refreshFromSheets() {
   if (!state.currentUser) return;
+  const targetState = state;
+  const user = state.currentUser;
   showToast('🔄 從雲端讀取...');
   try {
-    const data = await callScript({ type: 'sheets_read', user: state.currentUser });
+    const data = await callScript({ type: 'sheets_read', user });
+    // 等待 API 期間可能已切換帳號，不把前一位用戶的單字加入新帳號。
+    if (state !== targetState || state.currentUser !== user) return;
     (data.words || []).forEach(w => {
       if ((state.hiddenWords.en || []).includes(w.en.toLowerCase())) return;
       const local = state.words.find(x => x.en.toLowerCase() === w.en.toLowerCase());
@@ -292,6 +297,7 @@ async function refreshFromSheets() {
     updateHome();
     showToast('✅ 同步完成！');
   } catch(e) {
+    if (state !== targetState || state.currentUser !== user) return;
     showToast('❌ 同步失敗：' + e.message);
   }
 }
