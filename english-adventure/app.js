@@ -156,6 +156,7 @@ function getLastUser() { return localStorage.getItem('ea_last_user') || null; }
 function setLastUser(name) { localStorage.setItem('ea_last_user', name); }
 
 function loginUser(name) {
+  learningTime.stop();
   state.currentUser = name;
   load(name);
   setLastUser(name);
@@ -166,10 +167,12 @@ function loginUser(name) {
   showScreen('home');
   document.getElementById('userSelectScreen').style.display = 'none';
   document.getElementById('appWrapper').style.display = 'block';
+  learningTime.start(name, state.settings.scriptUrl || DEFAULT_SCRIPT_URL);
   if (!state.words.length && !state.jaWords.length) refreshFromSheets();
 }
 
 function showUserSelect() {
+  learningTime.stop();
   document.getElementById('userSelectScreen').style.display = 'flex';
   document.getElementById('appWrapper').style.display = 'none';
   renderUserSelect();
