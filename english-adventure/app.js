@@ -192,21 +192,35 @@ function setLastUser(name) {
   catch(e) { warnStorageUnavailable(); }
 }
 
-function loginUser(name) {
+async function loginUser(name, restoreCloud = false) {
   chirpSpeech.stop();
   learningTime.stop();
+  const version = ++userSelectVersion;
   state.currentUser = name;
   load(name);
+  const targetState = state;
   setLastUser(name);
   renderNav();
   updateAddSection();
   renderGenreGrid(storyState.level);
   updateHome();
   showScreen('home');
+  if (restoreCloud) {
+    const status = document.getElementById('userRecoveryStatus');
+    document.getElementById('userSelectScreen').style.display = 'flex';
+    document.getElementById('appWrapper').style.display = 'none';
+    if (status) status.textContent = `正在載入 ${name} 的英文、日文單字庫…`;
+    const loaded = await refreshFromSheets({ silent: true });
+    if (version !== userSelectVersion || state !== targetState) return;
+    if (!loaded) {
+      if (status) status.textContent = `無法載入 ${name} 的單字庫，請再點一次帳號重試。`;
+      return;
+    }
+  }
   document.getElementById('userSelectScreen').style.display = 'none';
   document.getElementById('appWrapper').style.display = 'block';
   learningTime.start(name, state.settings.scriptUrl || DEFAULT_SCRIPT_URL);
-  if (!state.words.length && !state.jaWords.length) refreshFromSheets();
+  if (!restoreCloud && !state.words.length && !state.jaWords.length) refreshFromSheets();
 }
 
 function showUserSelect() {
@@ -226,21 +240,21 @@ function renderUserSelect() {
   const container = document.getElementById('userSelectScreen');
   container.innerHTML = `
     <div class="user-select-wrap">
-      <div class="user-select-title">👋 你是誰？</div>
-      <div class="user-list">
+      <div class="user-select-title">☁️ 選擇雲端用戶</div>
+      <p style="text-align:center;color:var(--text-soft);margin-bottom:16px">點選原本的帳號，自動載入英文和日文單字庫。</p>
+      <div class="user-list" id="cloudUserList">
         ${users.map(u => `
-          <button class="user-btn" onclick="loginUser('${esc(u.name)}')">
+          <button class="user-btn" onclick="loginUser('${esc(u.name)}',true)">
             <span class="user-emoji">${html(u.emoji)}</span>
             <span class="user-name">${html(u.name)}</span>
           </button>`).join('')}
-        <button class="user-btn user-add-btn" onclick="showAddUser()">
-          <span class="user-emoji">➕</span>
-          <span class="user-name">新增用戶</span>
-        </button>
       </div>
       <button id="restoreCloudUsersBtn" onclick="restoreCloudUsers(this)" class="user-btn">☁️ 找回雲端用戶</button>
-      <p style="text-align:center;color:var(--text-soft)">換裝置或清除瀏覽資料後，可找回原帳號與已同步的單字。</p>
       <p id="userRecoveryStatus" style="text-align:center" role="status"></p>
+      <details style="margin-top:24px;text-align:center;color:var(--text-soft)">
+        <summary>第一次使用？</summary>
+        <button class="user-btn user-add-btn" onclick="showAddUser()" style="margin-top:12px">➕ 新增用戶</button>
+      </details>
     </div>`;
 }
 
@@ -263,14 +277,9 @@ async function restoreCloudUsers(button) {
       if (!users.some(u => u.name === name)) users.push({ name, emoji: '☁️' });
     });
     saveUsers(users);
-    const lastUser = getLastUser();
-    if (lastUser && users.some(u => u.name === lastUser)) {
-      loginUser(lastUser);
-      return;
-    }
     renderUserSelect();
     document.getElementById('userRecoveryStatus').textContent = data.users.length
-      ? '請選擇原本的用戶，空單字庫會自動從雲端取回單字。'
+      ? '點選帳號即可載入單字庫，不需要重新新增用戶。'
       : '雲端沒有找到用戶，請確認 API 設定或原本使用的網址。';
   } catch(e) {
     if (!isCurrent()) return;
@@ -331,15 +340,16 @@ async function sheetsUpdate(lang, word, stage, nextReview) {
   catch(e) { console.warn('Sheets 更新失敗:', e.message); }
 }
 
-async function refreshFromSheets() {
-  if (!state.currentUser) return;
+async function refreshFromSheets(options = {}) {
+  if (!state.currentUser) return false;
   const targetState = state;
   const user = state.currentUser;
-  showToast('🔄 從雲端讀取...');
+  if (!options.silent) showToast('🔄 從雲端讀取...');
   try {
     const data = await callScript({ type: 'sheets_read', user });
     // 等待 API 期間可能已切換帳號，不把前一位用戶的單字加入新帳號。
-    if (state !== targetState || state.currentUser !== user) return;
+    if (state !== targetState || state.currentUser !== user) return false;
+    if (!Array.isArray(data.words) || !Array.isArray(data.jaWords)) throw new Error('單字庫資料格式錯誤');
     (data.words || []).forEach(w => {
       if ((state.hiddenWords.en || []).includes(w.en.toLowerCase())) return;
       const local = state.words.find(x => x.en.toLowerCase() === w.en.toLowerCase());
@@ -353,10 +363,12 @@ async function refreshFromSheets() {
     save();
     renderWordList();
     updateHome();
-    showToast('✅ 同步完成！');
+    if (!options.silent) showToast('✅ 同步完成！');
+    return true;
   } catch(e) {
-    if (state !== targetState || state.currentUser !== user) return;
-    showToast('❌ 同步失敗：' + e.message);
+    if (state !== targetState || state.currentUser !== user) return false;
+    if (!options.silent) showToast('❌ 同步失敗：' + e.message);
+    return false;
   }
 }
 

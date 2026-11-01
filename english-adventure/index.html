@@ -15,7 +15,7 @@
 <body>
 
 <!-- 用戶選擇頁（全螢幕覆蓋） -->
-<div id="userSelectScreen" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:9999;align-items:center;justify-content:center;padding:20px"></div>
+<div id="userSelectScreen" style="display:flex;position:fixed;inset:0;background:var(--bg);z-index:9999;align-items:center;justify-content:center;padding:20px"><div class="user-select-wrap"><div class="user-select-title">☁️ 找回雲端用戶</div><p style="text-align:center" role="status">正在載入用戶清單…</p></div></div>
 
 <!-- App 主體 -->
 <div id="appWrapper" style="display:none">
@@ -234,6 +234,6 @@
 <script src="stroke-data.js"></script>
 <script src="learning-time.js"></script>
 <script src="chirp-speech.js?v=20261101-1"></script>
-<script src="app.js?v=20261101-startup1"></script>
+<script src="app.js?v=20261101-cloud-entry1"></script>
 </body>
 </html>
