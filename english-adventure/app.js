@@ -102,7 +102,22 @@ const HIRAGANA_ROMAJI = {
 
 // ==================== STORAGE ====================
 function getStorageKey() { return state.currentUser ? `ea_state_${state.currentUser}` : 'ea_state'; }
-function save() { try { localStorage.setItem(getStorageKey(), JSON.stringify(state)); } catch(e) {} }
+let storageWarningShown = false;
+function warnStorageUnavailable() {
+  if (storageWarningShown) return;
+  storageWarningShown = true;
+  const notice = document.createElement('div');
+  notice.id = 'storageWarning';
+  notice.setAttribute('role', 'status');
+  notice.style.cssText = 'margin:12px;padding:12px;border-radius:12px;background:#FFF3CD;color:#664D03;font-size:14px';
+  notice.textContent = '⚠️ 本機資料目前無法保存。重開瀏覽器可能需要重新選擇帳號；請改用一般分頁，勿清除網站資料。';
+  document.getElementById('appWrapper').prepend(notice);
+  showToast('⚠️ 此瀏覽器目前無法儲存本機資料；請使用一般分頁，並保留現有網站資料。', 10000);
+}
+function save() {
+  try { localStorage.setItem(getStorageKey(), JSON.stringify(state)); }
+  catch(e) { warnStorageUnavailable(); }
+}
 
 function load(userName) {
   try {
@@ -140,20 +155,42 @@ function load(userName) {
 }
 
 // ==================== 用戶管理 ====================
+let sessionUsers = [], sessionLastUser = null, userSelectVersion = 0;
 function getAllUsers() {
-  const users = JSON.parse(localStorage.getItem('ea_users') || '[]');
+  let users = sessionUsers.slice();
+  try {
+    const stored = JSON.parse(localStorage.getItem('ea_users') || '[]');
+    if (Array.isArray(stored)) stored.forEach(u => {
+      if (u && typeof u.name === 'string' && u.name.trim() && !users.some(item => item.name === u.name)) {
+        users.push({ name: u.name, emoji: typeof u.emoji === 'string' ? u.emoji : '👤' });
+      }
+    });
+  } catch(e) { /* Recover names from individual records or the cloud below. */ }
   // 使用者索引遺失時，仍保留並顯示既有的個別學習資料。
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (!key.startsWith('ea_state_')) continue;
-    const name = key.slice('ea_state_'.length);
-    if (name && !users.some(u => u.name === name)) users.push({ name, emoji: '👤' });
-  }
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith('ea_state_')) continue;
+      const name = key.slice('ea_state_'.length);
+      if (name && !users.some(u => u.name === name)) users.push({ name, emoji: '👤' });
+    }
+  } catch(e) { /* The session list still works if browser storage is blocked. */ }
   return users;
 }
-function saveUsers(users) { localStorage.setItem('ea_users', JSON.stringify(users)); }
-function getLastUser() { return localStorage.getItem('ea_last_user') || null; }
-function setLastUser(name) { localStorage.setItem('ea_last_user', name); }
+function saveUsers(users) {
+  sessionUsers = users.slice();
+  try { localStorage.setItem('ea_users', JSON.stringify(users)); }
+  catch(e) { warnStorageUnavailable(); }
+}
+function getLastUser() {
+  try { return localStorage.getItem('ea_last_user') || sessionLastUser; }
+  catch(e) { return sessionLastUser; }
+}
+function setLastUser(name) {
+  sessionLastUser = name;
+  try { localStorage.setItem('ea_last_user', name); }
+  catch(e) { warnStorageUnavailable(); }
+}
 
 function loginUser(name) {
   chirpSpeech.stop();
@@ -178,9 +215,13 @@ function showUserSelect() {
   document.getElementById('userSelectScreen').style.display = 'flex';
   document.getElementById('appWrapper').style.display = 'none';
   renderUserSelect();
+  if (!getAllUsers().length) {
+    void restoreCloudUsers(document.getElementById('restoreCloudUsersBtn'));
+  }
 }
 
 function renderUserSelect() {
+  userSelectVersion++;
   const users = getAllUsers();
   const container = document.getElementById('userSelectScreen');
   container.innerHTML = `
@@ -197,18 +238,23 @@ function renderUserSelect() {
           <span class="user-name">新增用戶</span>
         </button>
       </div>
-      <button onclick="restoreCloudUsers(this)" class="user-btn">☁️ 找回雲端用戶</button>
+      <button id="restoreCloudUsersBtn" onclick="restoreCloudUsers(this)" class="user-btn">☁️ 找回雲端用戶</button>
       <p style="text-align:center;color:var(--text-soft)">換裝置或清除瀏覽資料後，可找回原帳號與已同步的單字。</p>
       <p id="userRecoveryStatus" style="text-align:center" role="status"></p>
     </div>`;
 }
 
 async function restoreCloudUsers(button) {
+  if (!button || button.disabled) return;
   button.disabled = true;
   const status = document.getElementById('userRecoveryStatus');
+  const version = userSelectVersion;
+  const isCurrent = () => version === userSelectVersion && status === document.getElementById('userRecoveryStatus')
+    && document.getElementById('appWrapper').style.display === 'none';
   status.textContent = '正在尋找雲端用戶…';
   try {
     const data = await callScript({ type: 'sheets_get_users' });
+    if (!isCurrent()) return;
     if (!Array.isArray(data.users) || data.users.some(name => typeof name !== 'string' || !name.trim())) {
       throw new Error('雲端用戶清單格式錯誤');
     }
@@ -217,17 +263,24 @@ async function restoreCloudUsers(button) {
       if (!users.some(u => u.name === name)) users.push({ name, emoji: '☁️' });
     });
     saveUsers(users);
+    const lastUser = getLastUser();
+    if (lastUser && users.some(u => u.name === lastUser)) {
+      loginUser(lastUser);
+      return;
+    }
     renderUserSelect();
     document.getElementById('userRecoveryStatus').textContent = data.users.length
       ? '請選擇原本的用戶，空單字庫會自動從雲端取回單字。'
       : '雲端沒有找到用戶，請確認 API 設定或原本使用的網址。';
   } catch(e) {
+    if (!isCurrent()) return;
     status.textContent = '找回失敗：' + e.message;
     button.disabled = false;
   }
 }
 
 function showAddUser() {
+  userSelectVersion++;
   const container = document.getElementById('userSelectScreen');
   const emojis = ['👦','👧','👨','👩','🧒','👴','👵','🧑','🐶','🐱','🦊','🐼'];
   container.innerHTML = `
