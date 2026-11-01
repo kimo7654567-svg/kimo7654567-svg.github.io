@@ -156,6 +156,7 @@ function getLastUser() { return localStorage.getItem('ea_last_user') || null; }
 function setLastUser(name) { localStorage.setItem('ea_last_user', name); }
 
 function loginUser(name) {
+  chirpSpeech.stop();
   learningTime.stop();
   state.currentUser = name;
   load(name);
@@ -172,6 +173,7 @@ function loginUser(name) {
 }
 
 function showUserSelect() {
+  chirpSpeech.stop();
   learningTime.stop();
   document.getElementById('userSelectScreen').style.display = 'flex';
   document.getElementById('appWrapper').style.display = 'none';
@@ -399,6 +401,7 @@ function updateAddSection() {
 }
 
 function switchLang(lang) {
+  stopReading();
   state.lang = lang;
   save();
   document.querySelectorAll('.lang-flag').forEach(btn => btn.classList.toggle('active', btn.dataset.lang === lang));
@@ -435,6 +438,7 @@ function renderNav() {
 }
 
 function showScreen(name) {
+  stopReading();
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   const screen = document.getElementById('screen-' + name);
@@ -715,61 +719,21 @@ function stripJapaneseRubyNotation(text) {
   return String(text || '').replace(/[\u3400-\u9FFF々]+\[([ぁ-ゖァ-ヺー]+)\]/g, '$1');
 }
 
-function setSpeechVoice(utterance, lang) {
-  const voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
-  const wanted = String(lang || '').toLowerCase();
-  const voice = voices.find(v => v.lang.toLowerCase() === wanted)
-    || voices.find(v => v.lang.toLowerCase().startsWith(wanted.split('-')[0]));
-  if (voice) utterance.voice = voice;
-}
-
 function speak(text, lang, rate) {
-  lang = lang || 'en-US';
-  rate = rate || 0.85;
-  if (!window.speechSynthesis) { showToast('此裝置不支援語音'); return; }
-  window.speechSynthesis.cancel();
-  // iPad Safari 需要先 resume 才能發音
-  if (window.speechSynthesis.paused) window.speechSynthesis.resume();
-  const spokenText = lang === 'ja-JP' ? stripJapaneseRubyNotation(text) : text;
-  const u = new SpeechSynthesisUtterance(stripEmoji(spokenText));
-  u.lang = lang; u.rate = rate;
-  setSpeechVoice(u, lang);
-  window.speechSynthesis.speak(u);
+  const code = lang === 'ja-JP' ? 'ja' : 'en';
+  const spoken = stripEmoji(code === 'ja' ? stripJapaneseRubyNotation(text) : text);
+  if (!spoken) return Promise.resolve(false);
+  return chirpSpeech.play(spoken, code, rate || 0.85);
 }
-
-function speakWebSpeech(text, langCode, rate) {
-  return new Promise((resolve) => {
-    if (!window.speechSynthesis) { resolve(); return; }
-    window.speechSynthesis.cancel();
-    if (window.speechSynthesis.paused) window.speechSynthesis.resume();
-    const spokenText = langCode === 'ja-JP' ? stripJapaneseRubyNotation(text) : text;
-    const u = new SpeechSynthesisUtterance(stripEmoji(spokenText));
-    u.lang = langCode || 'en-US';
-    u.rate = rate || 0.85;
-    setSpeechVoice(u, u.lang);
-    u.onend = resolve;
-    u.onerror = resolve;
-    window.speechSynthesis.speak(u);
-  });
-}
-
-let _ttsAudio = null;
-let _ttsPlaying = false;
 
 function speakGemini(text, lang) {
-  lang = lang || 'en';
-  const langCode = lang === 'ja' ? 'ja-JP' : 'en-US';
   const rate = LEVEL_RATES[storyState.level] || 0.85;
-  return speakWebSpeech(text, langCode, rate);
+  return speak(text, lang === 'ja' ? 'ja-JP' : 'en-US', rate);
 }
 
 function stopGeminiTTS() {
-  _ttsPlaying = false;
-  if (_ttsAudio) { _ttsAudio.pause(); _ttsAudio.currentTime = 0; _ttsAudio = null; }
-  window.speechSynthesis && window.speechSynthesis.cancel();
+  chirpSpeech.stop();
 }
-
-
 
 function debugStoryWords() {
   const isJa = state.lang === 'ja';
@@ -783,20 +747,10 @@ function debugStoryWords() {
 }
 
 async function testTTS() {
-  showToast('⏳ 測試中...', 10000);
-  try {
-    const isJa = state.lang === 'ja';
-    const result = await callScript({ type: 'tts', text: isJa ? 'こんにちは。これは音声テストです。' : 'Hello, this is a test.', lang: isJa ? 'ja' : 'en' });
-    if (result.audioData) {
-      const audio = new Audio(`data:${result.mimeType || 'audio/wav'};base64,${result.audioData}`);
-      audio.play();
-      showToast('✅ Gemini TTS 正常！', 3000);
-    } else {
-      showToast('❌ 沒有音訊資料：' + JSON.stringify(result).slice(0, 80), 5000);
-    }
-  } catch(e) {
-    showToast('❌ TTS 錯誤：' + e.message.slice(0, 100), 6000);
-  }
+  const isJa = state.lang === 'ja';
+  const ok = await speak(isJa ? 'こんにちは。これは音声テストです。' : 'Hello, this is a voice test.',
+    isJa ? 'ja-JP' : 'en-US');
+  if (ok) showToast('✅ Chirp 3 HD 語音播放成功！', 3000);
 }
 
 // ==================== FILL-IN-BLANK ====================
@@ -1335,8 +1289,9 @@ function readStoryAll() {
     clearHighlight();
     const el = document.getElementById('story-sent-' + idx);
     if (el) el.classList.add('speaking');
-    await speakGemini(sentences[idx], lang);
+    const completed = await speakGemini(sentences[idx], lang);
     if (el) el.classList.remove('speaking');
+    if (!completed || cancelled) return;
     idx++;
     speakNext();
   }
@@ -1345,16 +1300,18 @@ function readStoryAll() {
 
 function readStoryStep() {
   const idx = storyState.stepIdx;
+  if (window._storyReadCancelled) { window._storyReadCancelled(); window._storyReadCancelled = null; }
+  stopGeminiTTS();
   if (idx >= storyState.sentences.length) { storyState.stepIdx = 0; showToast('已朗讀完畢，從頭開始'); return; }
   clearHighlight();
   const el = document.getElementById('story-sent-' + idx);
   if (el) { el.classList.add('speaking'); el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
   const lang = state.lang === 'ja' ? 'ja' : 'en';
   if (idx === 0) showToast('⏳ 載入語音...');
-  speakGemini(storyState.sentences[idx], lang).then(() => {
+  speakGemini(storyState.sentences[idx], lang).then(completed => {
     if (el) el.classList.remove('speaking');
+    if (completed) storyState.stepIdx = idx + 1;
   });
-  storyState.stepIdx++;
 }
 
 function stopReading() {
